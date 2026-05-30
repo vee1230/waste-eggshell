@@ -80,6 +80,15 @@ if (window.innerWidth > 768) {
         const width = window.innerWidth;
         const height = window.innerHeight;
 
+        if (height <= 550) {
+            return {
+                x: width / 2 - 50,
+                y: height * -0.02,
+                scale: 0.38,
+                rotation: 8
+            };
+        }
+
         if (width <= 480) {
             return {
                 x: 0,
@@ -125,8 +134,27 @@ if (window.innerWidth > 768) {
             };
         }
 
+        function getIntroJarScale(defaultScale = 0.92) {
+            if (window.innerHeight > 550) return defaultScale;
+
+            const target = document.querySelector(".intro-product-wrap");
+            const jar = document.querySelector(".product-jar");
+            if (!target || !jar) return Math.min(defaultScale, 0.58);
+
+            const targetRect = target.getBoundingClientRect();
+            const jarSize = Math.max(jar.offsetWidth, jar.offsetHeight);
+            const targetSize = Math.min(targetRect.width, targetRect.height);
+
+            if (!targetSize || !jarSize) return Math.min(defaultScale, 0.58);
+
+            const fittedScale = (targetSize / jarSize) * 0.86;
+            return Math.min(defaultScale, Math.max(0.44, fittedScale));
+        }
+
         // Get exact viewport coordinates for loader placeholder
         const loaderPos = getTargetPosition(".intro-product-wrap");
+        const loaderScale = getIntroJarScale();
+        const initialLoaderScale = window.innerHeight <= 550 ? Math.min(0.82, loaderScale + 0.14) : 0.82;
 
         // Calculate hero section starting coordinates using the shared function
         const heroState = getHeroJarState();
@@ -145,7 +173,7 @@ if (window.innerWidth > 768) {
             transformOrigin: "center center",
             x: loaderPos.x,
             y: loaderPos.y + 40,
-            scale: 0.82,
+            scale: initialLoaderScale,
             rotation: 0,
             opacity: 0,
             visibility: "visible",
@@ -184,7 +212,7 @@ if (window.innerWidth > 768) {
             .to("#mainProductVisual", {
                 opacity: 1,
                 y: loaderPos.y,
-                scale: 0.92,
+                scale: loaderScale,
                 duration: 1.2,
                 overwrite: "auto"
             })
