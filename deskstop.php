@@ -65,7 +65,7 @@ if (isset($_SESSION["logged_in"]) && $_SESSION["logged_in"] === true) {
                 <div class="hero-label">INNOVATIVE FORENSIC SCIENCE</div>
                 <h1 class="hero-title">
                     <span class="title-line">GREEN</span>
-                    <span class="title-line">FORENSICS</span>
+                    <span class="title-line">TECHNOLOGY</span>
                 </h1>
                 <p class="hero-subtitle">Sustainable Fingerprint Powder Using Chicken Eggshell Waste</p>
                 <a href="<?php echo $target_link; ?>" class="hero-btn">
