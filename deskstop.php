@@ -39,7 +39,7 @@ if (isset($_SESSION["logged_in"]) && $_SESSION["logged_in"] === true) {
             </div>
 
             <div class="intro-text">
-                <span class="intro-label">GREEN FORENSICS</span>
+                <span class="intro-label">GREEN Technology</span>
                 <h1>Eco Fingerprint Powder</h1>
                 <p>Sustainable Fingerprint Powder Using Chicken Eggshell Waste</p>
             </div>
