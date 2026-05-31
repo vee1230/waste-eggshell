@@ -38,6 +38,28 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     // ============================================================
+    // 4b. MIGRATION: Rename old 'name' column → 'full_name' if needed
+    // ============================================================
+    $cols = $pdo->query("SHOW COLUMNS FROM `users`")->fetchAll(PDO::FETCH_COLUMN);
+    if (in_array('name', $cols) && !in_array('full_name', $cols)) {
+        $pdo->exec("ALTER TABLE `users` CHANGE `name` `full_name` VARCHAR(150) NOT NULL");
+    }
+    // 4c. MIGRATION: Add 'role' column if missing
+    if (!in_array('role', $cols)) {
+        $pdo->exec("ALTER TABLE `users` ADD COLUMN `role`
+            ENUM('super_admin','faculty_researcher','criminology_student','alumni_police_partner')
+            NOT NULL DEFAULT 'criminology_student' AFTER `password`");
+        // Promote existing admin emails to super_admin
+        $pdo->exec("UPDATE `users` SET `role`='super_admin'
+            WHERE `email` IN ('admin@greenforensics.com','admin@greenforensics.edu.ph')");
+    }
+    // 4d. MIGRATION: Add 'updated_at' column if missing (old schema had none)
+    if (!in_array('updated_at', $cols)) {
+        $pdo->exec("ALTER TABLE `users` ADD COLUMN `updated_at`
+            TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER `created_at`");
+    }
+
+    // ============================================================
     // 5. Create FINGERPRINT_TESTS table
     // ============================================================
     $pdo->exec("CREATE TABLE IF NOT EXISTS `fingerprint_tests` (
