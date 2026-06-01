@@ -35,12 +35,14 @@ $cardTitle = 'Account Registration Submitted';
 $mainMessage = 'Your registration has been submitted successfully.';
 $secondaryMessage = 'Your account is currently under review by the Super Administrator. You will be able to log in once your account has been approved.';
 $showWaiting = true;
+$showApprovalPopup = false;
 
 if ($accountStatus === 'active') {
     $statusBadge = 'Approved';
     $mainMessage = 'Your account has been approved. You may now log in.';
     $secondaryMessage = 'Access is now available through the login page.';
     $showWaiting = false;
+    $showApprovalPopup = true;
 } elseif ($accountStatus === 'rejected') {
     $statusBadge = 'Not Approved';
     $mainMessage = 'Your registration was not approved. Please contact the system administrator.';
@@ -368,6 +370,62 @@ function status_class($status) {
             display: contents;
         }
 
+        .approval-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(31, 63, 42, 0.42);
+            padding: 1.25rem;
+        }
+
+        .approval-modal {
+            width: min(100%, 480px);
+            background: var(--white);
+            border-radius: 16px;
+            border: 1px solid rgba(107, 143, 113, 0.22);
+            box-shadow: 0 24px 70px rgba(31, 63, 42, 0.22);
+            padding: clamp(1.5rem, 4vw, 2rem);
+            text-align: center;
+        }
+
+        .approval-modal h2 {
+            color: var(--dark-green);
+            font-size: clamp(1.35rem, 4vw, 1.75rem);
+            font-weight: 800;
+            margin-bottom: 0.7rem;
+        }
+
+        .approval-modal p {
+            color: var(--gray);
+            font-size: 0.95rem;
+            line-height: 1.65;
+            margin-bottom: 1.25rem;
+        }
+
+        .approval-modal .modal-status {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            padding: 0.45rem 0.85rem;
+            color: var(--forest-green);
+            background: rgba(107, 143, 113, 0.13);
+            border: 1px solid rgba(107, 143, 113, 0.22);
+            font-size: 0.78rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
         @media (max-width: 640px) {
             body {
                 align-items: flex-start;
@@ -387,7 +445,8 @@ function status_class($status) {
             }
 
             .actions,
-            .btn {
+            .btn,
+            .modal-actions {
                 width: 100%;
             }
         }
@@ -448,5 +507,35 @@ function status_class($status) {
             </div>
         </section>
     </main>
+
+    <?php if ($showApprovalPopup): ?>
+        <div class="approval-overlay" id="approvalModal" role="dialog" aria-modal="true" aria-labelledby="approvalTitle">
+            <section class="approval-modal">
+                <div class="modal-status">Account Approved</div>
+                <h2 id="approvalTitle">Account Approval Successful</h2>
+                <p>Your account has been approved by the Super Administrator. You may now proceed to the login page and access the system using your approved account.</p>
+                <div class="modal-actions">
+                    <a href="login.php" class="btn btn-primary">Go to Login</a>
+                    <button type="button" class="btn btn-secondary" id="closeApprovalModal">Stay on Page</button>
+                </div>
+            </section>
+        </div>
+    <?php endif; ?>
+
+    <script>
+        <?php if ($accountStatus === 'pending'): ?>
+        window.setTimeout(() => {
+            window.location.reload();
+        }, 30000);
+        <?php endif; ?>
+
+        const closeApprovalModal = document.getElementById('closeApprovalModal');
+        const approvalModal = document.getElementById('approvalModal');
+        if (closeApprovalModal && approvalModal) {
+            closeApprovalModal.addEventListener('click', () => {
+                approvalModal.style.display = 'none';
+            });
+        }
+    </script>
 </body>
 </html>
