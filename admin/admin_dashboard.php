@@ -12,12 +12,17 @@ $total_trials = 142; // Fallback default
 $total_images = 86;  // Fallback default
 $total_reports = 18;  // Fallback default
 
+$pending_count = 0;
 try {
     // 1. Count actual users
     $stmt = $pdo->query("SELECT COUNT(*) FROM users");
     $total_users = $stmt->fetchColumn();
 
-    // 2. Count trials if table exists
+    // 2. Count pending registrations
+    $stmt2 = $pdo->query("SELECT COUNT(*) FROM users WHERE status='pending'");
+    $pending_count = $stmt2 ? (int)$stmt2->fetchColumn() : 0;
+
+    // 3. Count trials if table exists
     $stmt = $pdo->query("SELECT COUNT(*) FROM fingerprint_tests");
     if ($stmt) {
         $db_trials = $stmt->fetchColumn();
@@ -93,6 +98,15 @@ $activities = [
                             <rect x="3" y="16" width="7" height="5"></rect>
                         </svg>
                         <span>Dashboard</span>
+                    </a>
+                </li>
+                <li class="menu-item">
+                    <a href="admin_pending.php" class="menu-link" style="position:relative;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <span>Pending Approvals<?php if ($pending_count > 0): ?> <span style="background:#e07a5f;color:#fff;border-radius:20px;font-size:.65rem;padding:1px 7px;font-weight:700;margin-left:4px;"><?php echo $pending_count; ?></span><?php endif; ?></span>
                     </a>
                 </li>
                 <li class="menu-item">

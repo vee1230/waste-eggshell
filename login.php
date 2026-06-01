@@ -11,6 +11,8 @@ if (isset($_SESSION['logged_in']) && $_SESSION['logged_in'] === true) {
         header("Location: admin/admin_dashboard.php");
     } elseif ($role === 'faculty_researcher') {
         header("Location: faculty/faculty_dashboard.php");
+    } elseif ($role === 'criminology_student') {
+        header("Location: student/student_dashboard.php");
     } else {
         header("Location: dashboard.php");
     }
@@ -35,13 +37,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } else {
         // Prepare a select statement
         $sql = "SELECT id, full_name, email, password, role, status FROM users WHERE email = :email";
-        
+
         try {
             if ($stmt = $pdo->prepare($sql)) {
                 // Bind variables to the prepared statement as parameters
                 $stmt->bindParam(":email", $param_email, PDO::PARAM_STR);
                 $param_email = $email;
-                
+
                 // Attempt to execute the prepared statement
                 if ($stmt->execute()) {
                     // Check if email exists
@@ -52,29 +54,37 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             $hashed_password = $row["password"];
                             $user_role = $row["role"];
                             $status = $row["status"];
-                            
+
                             // Verify password
                             if (password_verify($password, $hashed_password)) {
                                 // Check if user account is active
                                 if ($status === 'active') {
                                     // Set session variables
                                     $_SESSION["logged_in"] = true;
-                                    $_SESSION["user_id"]   = $id;
+                                    $_SESSION["user_id"] = $id;
                                     $_SESSION["user_name"] = $full_name;
-                                    $_SESSION["user_email"]= $email;
+                                    $_SESSION["user_email"] = $email;
                                     $_SESSION["user_role"] = $user_role;
-                                    
+
                                     // Redirect based on role
                                     if ($user_role === 'super_admin') {
                                         header("Location: admin/admin_dashboard.php");
                                     } elseif ($user_role === 'faculty_researcher') {
                                         header("Location: faculty/faculty_dashboard.php");
+                                    } elseif ($user_role === 'criminology_student') {
+                                        header("Location: student/student_dashboard.php");
                                     } else {
                                         header("Location: dashboard.php");
                                     }
                                     exit;
+                                } elseif ($status === 'pending') {
+                                    $error_message = "Your account is still pending approval. Please wait for the Super Administrator to review your registration.";
+                                } elseif ($status === 'rejected') {
+                                    $error_message = "Your registration was not approved. Please contact the administrator for more information.";
+                                } elseif ($status === 'suspended') {
+                                    $error_message = "Your account has been suspended. Please contact the administrator.";
                                 } else {
-                                    $error_message = "Account is inactive.";
+                                    $error_message = "Your account is currently inactive. Please contact the administrator.";
                                 }
                             } else {
                                 // Display generic error for security
@@ -88,7 +98,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 } else {
                     $error_message = "Oops! Something went wrong. Please try again later.";
                 }
-                
+
                 // Close statement
                 unset($stmt);
             }
@@ -96,13 +106,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $error_message = "Connection error: " . $e->getMessage();
         }
     }
-    
+
     // Close connection
     unset($pdo);
 }
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -112,6 +123,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <!-- Google Fonts Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
+
 <body>
 
     <header>
@@ -139,7 +151,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <div class="card-header">
                 <div class="card-icon">
                     <!-- Fingerprint SVG Icon -->
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
                         <path d="M12 2a10 10 0 0 0-7.3 16.8"></path>
                         <path d="M12 2a10 10 0 0 1 7.3 16.8"></path>
                         <path d="M12 6a6 6 0 0 0-4.4 10.1"></path>
@@ -156,7 +169,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <!-- Error Alert -->
             <?php if (!empty($error_message)): ?>
                 <div class="alert alert-danger">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10"></circle>
                         <line x1="12" y1="8" x2="12" y2="12"></line>
                         <line x1="12" y1="16" x2="12.01" y2="16"></line>
@@ -170,12 +184,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <label for="email">Email Address</label>
                     <div class="input-wrapper">
                         <span class="input-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z">
+                                </path>
                                 <polyline points="22,6 12,13 2,6"></polyline>
                             </svg>
                         </span>
-                        <input type="email" name="email" id="email" class="form-control" placeholder="Enter your email" value="<?php echo htmlspecialchars($email); ?>" required>
+                        <input type="email" name="email" id="email" class="form-control" placeholder="Enter your email"
+                            value="<?php echo htmlspecialchars($email); ?>" required>
                     </div>
                 </div>
 
@@ -183,26 +200,30 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <label for="password">Password</label>
                     <div class="input-wrapper">
                         <span class="input-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
                                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                             </svg>
                         </span>
-                        <input type="password" name="password" id="password" class="form-control" placeholder="Enter your password" required>
+                        <input type="password" name="password" id="password" class="form-control"
+                            placeholder="Enter your password" required>
                     </div>
                 </div>
 
                 <button type="submit" class="btn-primary">
                     <span>Login Securely</span>
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
                         <line x1="5" y1="12" x2="19" y2="12"></line>
                         <polyline points="12 5 19 12 12 19"></polyline>
                     </svg>
                 </button>
             </form>
-            
-            <div style="text-align: center; margin-top: 1.5rem; font-size: 0.8rem; color: var(--gray); font-style: italic;">
-                Authorized users only.
+
+            <div
+                style="text-align: center; margin-top: 1.5rem; font-size: 0.8rem; color: var(--gray); font-style: italic;">
+                Authorized access only. Registering users must be approved by the Super Administrator.
             </div>
 
             <div class="register-link-wrapper">
@@ -212,7 +233,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
             <div class="back-link-wrapper">
                 <a href="index.php" class="back-link">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
                         <line x1="19" y1="12" x2="5" y2="12"></line>
                         <polyline points="12 19 5 12 12 5"></polyline>
                     </svg>
@@ -252,4 +274,5 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </script>
 
 </body>
+
 </html>

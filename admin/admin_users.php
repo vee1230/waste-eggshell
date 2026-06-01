@@ -225,6 +225,15 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <span>Dashboard</span>
                     </a>
                 </li>
+                <li class="menu-item">
+                    <a href="admin_pending.php" class="menu-link">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <span>Pending Approvals</span>
+                    </a>
+                </li>
                 <li class="menu-item active">
                     <a href="admin_users.php" class="menu-link">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"

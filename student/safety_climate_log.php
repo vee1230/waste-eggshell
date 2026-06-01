@@ -1,0 +1,184 @@
+<?php
+// student/safety_climate_log.php — Submit & View Safety and Climate Logs
+require_once '../config.php';
+require_once 'auth.php';
+check_student_auth();
+
+$active_page  = 'safety_climate_log';
+$student_name = $_SESSION['user_name'] ?? 'Student';
+$student_id   = $_SESSION['user_id']  ?? 0;
+
+$msg = $msg_type = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $temperature = floatval($_POST['temperature'] ?? 0);
+    $humidity    = floatval($_POST['humidity']    ?? 0);
+    $ppe_worn    = trim($_POST['ppe_worn']    ?? '');
+    $conditions  = trim($_POST['conditions']  ?? '');
+    $notes       = trim($_POST['notes']       ?? '');
+
+    try {
+        $pdo->prepare("
+            INSERT INTO safety_logs (student_id, temperature, humidity, ppe_worn, lab_conditions, notes, logged_at)
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
+        ")->execute([$student_id, $temperature, $humidity, $ppe_worn, $conditions, $notes]);
+        $msg = 'Safety and climate log submitted successfully.';
+        $msg_type = 'success';
+    } catch (PDOException $e) {
+        $msg = 'Could not save log. The safety_logs table may need to be created.';
+        $msg_type = 'error';
+    }
+}
+
+// Fetch logs
+$logs = [];
+try {
+    $stmt = $pdo->prepare("SELECT * FROM safety_logs WHERE student_id = ? ORDER BY logged_at DESC LIMIT 30");
+    $stmt->execute([$student_id]);
+    $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Safety and Climate Log — Green Forensics">
+    <title>Safety &amp; Climate Log — Green Forensics</title>
+    <link rel="stylesheet" href="../css/student_style.css?v=1.0">
+    <style>
+        .temp-pill  { background:rgba(116,198,157,.15); color:var(--dark-green); padding:2px 10px; border-radius:20px; font-size:.8rem; font-weight:600; }
+        .humid-pill { background:rgba(45,106,79,.1); color:var(--medium-green); padding:2px 10px; border-radius:20px; font-size:.8rem; font-weight:600; }
+    </style>
+</head>
+<body>
+<div class="student-wrapper">
+    <div id="sidebarOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:999;"
+         onclick="this.style.display='none';document.getElementById('sidebar').classList.remove('active')"></div>
+
+    <?php require_once '_sidebar.php'; ?>
+
+    <main class="student-main">
+        <header class="student-header">
+            <div class="header-left">
+                <button class="menu-toggle" id="sidebarCollapse" aria-label="Toggle sidebar">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+                    </svg>
+                </button>
+                <div class="header-title"><h2>Safety &amp; Climate Log</h2></div>
+            </div>
+            <div class="header-right"><div class="header-role-chip">Criminology Student</div></div>
+        </header>
+
+        <div class="student-content">
+            <div class="page-header-wrap">
+                <div class="page-title">
+                    <h1>Safety &amp; Climate Log</h1>
+                    <p>Record laboratory conditions and safety compliance for each session.</p>
+                </div>
+            </div>
+
+            <?php if ($msg): ?>
+                <div class="alert-msg alert-<?= $msg_type ?>"><?= htmlspecialchars($msg) ?></div>
+            <?php endif; ?>
+
+            <!-- Log Form -->
+            <div class="dashboard-card" style="max-width:720px;">
+                <div class="card-title-wrap">
+                    <h3>
+                        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                        New Log Entry
+                    </h3>
+                </div>
+                <form method="POST" id="form-safety-log">
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="temperature">Temperature (°C)</label>
+                            <input type="number" name="temperature" id="temperature" class="form-control"
+                                   step="0.1" placeholder="e.g. 24.5">
+                        </div>
+                        <div class="form-group">
+                            <label for="humidity">Humidity (%)</label>
+                            <input type="number" name="humidity" id="humidity" class="form-control"
+                                   step="0.1" min="0" max="100" placeholder="e.g. 65.0">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ppe_worn">PPE Equipment Worn</label>
+                        <input type="text" name="ppe_worn" id="ppe_worn" class="form-control"
+                               placeholder="e.g. Gloves, Mask, Lab Coat, Goggles">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="conditions">General Lab Conditions</label>
+                        <select name="conditions" id="conditions" class="form-control">
+                            <option value="">— Select Condition —</option>
+                            <option value="Optimal">Optimal</option>
+                            <option value="Acceptable">Acceptable</option>
+                            <option value="Suboptimal">Suboptimal</option>
+                            <option value="Hazardous">Hazardous</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="notes">Additional Notes</label>
+                        <textarea name="notes" id="notes" class="form-control" rows="3"
+                                  placeholder="Any additional observations or safety concerns..."></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="btn-save-log">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        Save Log
+                    </button>
+                </form>
+            </div>
+
+            <!-- Log History -->
+            <div class="dashboard-card">
+                <div class="card-title-wrap">
+                    <h3>Log History</h3>
+                    <span style="font-size:.82rem;color:var(--gray);"><?= count($logs) ?> entr<?= count($logs) !== 1 ? 'ies' : 'y' ?></span>
+                </div>
+                <div class="table-responsive">
+                    <table class="custom-table">
+                        <thead>
+                            <tr>
+                                <th>Date &amp; Time</th>
+                                <th>Temperature</th>
+                                <th>Humidity</th>
+                                <th>PPE Worn</th>
+                                <th>Lab Conditions</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php if (empty($logs)): ?>
+                            <tr><td colspan="6" style="text-align:center;color:#6c757d;padding:2rem;">No logs recorded yet.</td></tr>
+                        <?php else: ?>
+                            <?php foreach ($logs as $log): ?>
+                            <tr>
+                                <td><?= date('M d, Y H:i', strtotime($log['logged_at'])) ?></td>
+                                <td><span class="temp-pill"><?= $log['temperature'] ?>°C</span></td>
+                                <td><span class="humid-pill"><?= $log['humidity'] ?>%</span></td>
+                                <td><?= htmlspecialchars($log['ppe_worn'] ?: '—') ?></td>
+                                <td><?= htmlspecialchars($log['lab_conditions'] ?: '—') ?></td>
+                                <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?= htmlspecialchars($log['notes'] ?: '—') ?></td>
+                            </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+<?php require_once '_sidebar_js.php'; ?>
+</body>
+</html>

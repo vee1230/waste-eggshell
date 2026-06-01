@@ -10,8 +10,21 @@ if (!isset($_SESSION["logged_in"]) || $_SESSION["logged_in"] !== true) {
     exit;
 }
 
-// Get user session data
-$user_name = $_SESSION["user_name"];
+// Redirect to correct role-based dashboard
+$role = $_SESSION['user_role'] ?? '';
+if ($role === 'super_admin') {
+    header("Location: admin/admin_dashboard.php");
+    exit;
+} elseif ($role === 'faculty_researcher') {
+    header("Location: faculty/faculty_dashboard.php");
+    exit;
+} elseif ($role === 'criminology_student') {
+    header("Location: student/student_dashboard.php");
+    exit;
+}
+
+// Get user session data (fallback for any other roles)
+$user_name  = $_SESSION["user_name"];
 $user_email = $_SESSION["user_email"];
 ?>
 <!DOCTYPE html>

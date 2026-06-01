@@ -1,37 +1,35 @@
 <?php
-// faculty/auth.php - Faculty Researcher Session Authentication
+// student/auth.php - Criminology Student Session Authentication
 
 if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }
 
 /**
- * Checks if the current session belongs to a faculty_researcher.
+ * Checks if the current session belongs to a criminology_student.
  * Redirects to login or shows Unauthorized Access if not.
  */
-function check_faculty_auth() {
+function check_student_auth() {
     // 1. Must be logged in
     if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
         header('Location: ../login.php');
         exit;
     }
 
-    // 2. Must be a faculty_researcher
-    if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'faculty_researcher') {
-        // Redirect to correct dashboard by role
+    // 2. Must be a criminology_student
+    if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'criminology_student') {
         $role = $_SESSION['user_role'] ?? '';
+
+        // Redirect to correct dashboard by role
         if ($role === 'super_admin') {
             header('Location: ../admin/admin_dashboard.php');
             exit;
-        } elseif ($role === 'criminology_student') {
-            header('Location: ../student/student_dashboard.php');
-            exit;
-        } elseif ($role === 'alumni_police_partner') {
-            header('Location: ../dashboard.php');
+        } elseif ($role === 'faculty_researcher') {
+            header('Location: ../faculty/faculty_dashboard.php');
             exit;
         }
 
-        // Unknown role - show error
+        // Unknown role — show Unauthorized Access page
         http_response_code(403);
         echo '<!DOCTYPE html>
 <html lang="en">
@@ -60,7 +58,7 @@ function check_faculty_auth() {
             </svg>
         </div>
         <h1>Unauthorized Access</h1>
-        <p>You do not have permission to view this page. This area is restricted to Faculty Researcher accounts only.</p>
+        <p>You do not have permission to view this page. This area is restricted to Criminology Student accounts only.</p>
         <a href="../login.php" class="btn">Back to Login</a>
     </div>
 </body>
