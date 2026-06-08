@@ -20,6 +20,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
         $password = trim($_POST["password"]);
         $role = $_POST["role"] ?? "criminology_student";
         $status = $_POST["status"];
+        $department = trim($_POST["department"] ?? "");
+        $affiliation = trim($_POST["affiliation"] ?? "");
 
         if (empty($name) || empty($email) || empty($password)) {
             $error = "Please fill in all required fields.";
@@ -37,14 +39,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
                 } else {
                     // Insert new user
                     $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                    $insertStmt = $pdo->prepare("INSERT INTO users (full_name, email, password, role, status) VALUES (:full_name, :email, :password, :role, :status)");
+                    $insertStmt = $pdo->prepare("INSERT INTO users (full_name, email, password, role, department, affiliation, status) VALUES (:full_name, :email, :password, :role, :department, :affiliation, :status)");
                     $insertStmt->execute([
                         ':full_name' => $name,
                         ':email' => $email,
                         ':password' => $hashed_password,
                         ':role' => $role,
+                        ':department' => $department,
+                        ':affiliation' => $affiliation,
                         ':status' => $status
                     ]);
+                    log_activity("Add User", "Created user account: $email with role: $role");
                     $success = "User account created successfully!";
                 }
             } catch (PDOException $e) {
@@ -59,6 +64,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
         $name = trim($_POST["name"]);
         $email = trim($_POST["email"]);
         $status = $_POST["status"];
+        $role = $_POST["role"] ?? "";
+        $department = trim($_POST["department"] ?? "");
+        $affiliation = trim($_POST["affiliation"] ?? "");
 
         if (empty($name) || empty($email)) {
             $error = "Name and email cannot be empty.";
@@ -70,14 +78,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
                 if ($stmt->rowCount() > 0) {
                     $error = "Email address is already in use by another account.";
                 } else {
+                    // Fetch current user details to see if role changed (prevent public self-promotion is managed by only super_admin editing)
+                    $curr_stmt = $pdo->prepare("SELECT role FROM users WHERE id = :id");
+                    $curr_stmt->execute([':id' => $id]);
+                    $curr_role = $curr_stmt->fetchColumn();
+
                     // Update user
-                    $updateStmt = $pdo->prepare("UPDATE users SET full_name = :full_name, email = :email, status = :status WHERE id = :id");
+                    $updateStmt = $pdo->prepare("UPDATE users SET full_name = :full_name, email = :email, role = :role, department = :department, affiliation = :affiliation, status = :status WHERE id = :id");
                     $updateStmt->execute([
                         ':full_name' => $name,
                         ':email' => $email,
+                        ':role' => !empty($role) ? $role : $curr_role,
+                        ':department' => $department,
+                        ':affiliation' => $affiliation,
                         ':status' => $status,
                         ':id' => $id
                     ]);
+                    log_activity("Edit User", "Updated user details for $email (status: $status, role: " . (!empty($role) ? $role : $curr_role) . ")");
                     $success = "User account updated successfully!";
                 }
             } catch (PDOException $e) {
@@ -98,6 +115,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
                 $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
                 $stmt = $pdo->prepare("UPDATE users SET password = :password WHERE id = :id");
                 $stmt->execute([':password' => $hashed_password, ':id' => $id]);
+                
+                // Fetch email for logging
+                $u_stmt = $pdo->prepare("SELECT email FROM users WHERE id = :id LIMIT 1");
+                $u_stmt->execute([':id' => $id]);
+                $u_email = $u_stmt->fetchColumn();
+
+                log_activity("Reset Password", "Reset password for user: $u_email");
                 $success = "Password reset successfully!";
             } catch (PDOException $e) {
                 $error = "Error resetting password: " . $e->getMessage();
@@ -114,6 +138,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
         try {
             $stmt = $pdo->prepare("UPDATE users SET status = :status WHERE id = :id");
             $stmt->execute([':status' => $new_status, ':id' => $id]);
+
+            // Fetch email for logging
+            $u_stmt = $pdo->prepare("SELECT email FROM users WHERE id = :id LIMIT 1");
+            $u_stmt->execute([':id' => $id]);
+            $u_email = $u_stmt->fetchColumn();
+
+            log_activity("Toggle Status", "Toggled status of $u_email to $new_status");
             $success = "Account status updated successfully!";
         } catch (PDOException $e) {
             $error = "Error updating status: " . $e->getMessage();
@@ -128,8 +159,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
             $error = "You cannot delete your own account.";
         } else {
             try {
+                // Fetch email for logging
+                $u_stmt = $pdo->prepare("SELECT email FROM users WHERE id = :id LIMIT 1");
+                $u_stmt->execute([':id' => $id]);
+                $u_email = $u_stmt->fetchColumn();
+
                 $stmt = $pdo->prepare("DELETE FROM users WHERE id = :id");
                 $stmt->execute([':id' => $id]);
+                
+                log_activity("Delete User", "Deleted user account: $u_email");
                 $success = "User account deleted successfully!";
             } catch (PDOException $e) {
                 $error = "Error deleting user: " . $e->getMessage();
@@ -138,15 +176,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
     }
 }
 
-// Fetch all users with search and filter
+// Fetch all users with search and filters
 $search = isset($_GET["search"]) ? trim($_GET["search"]) : "";
 $filter_status = isset($_GET["status"]) ? trim($_GET["status"]) : "";
+$filter_role = isset($_GET["role"]) ? trim($_GET["role"]) : "";
 
-$query_str = "SELECT id, full_name, email, role, status, created_at FROM users WHERE 1=1";
+$query_str = "SELECT id, full_name, email, role, department, affiliation, status, created_at FROM users WHERE 1=1";
 $params = [];
 
 if (!empty($search)) {
-    $query_str .= " AND (full_name LIKE :search OR email LIKE :search)";
+    $query_str .= " AND (full_name LIKE :search OR email LIKE :search OR department LIKE :search OR affiliation LIKE :search)";
     $params[':search'] = '%' . $search . '%';
 }
 
@@ -155,11 +194,26 @@ if (!empty($filter_status)) {
     $params[':status'] = $filter_status;
 }
 
+if (!empty($filter_role)) {
+    $query_str .= " AND role = :role";
+    $params[':role'] = $filter_role;
+}
+
 $query_str .= " ORDER BY id DESC";
 
 $stmt = $pdo->prepare($query_str);
 $stmt->execute($params);
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+function role_label($r) {
+    $map = [
+        'criminology_student' => 'Criminology Student',
+        'faculty_researcher' => 'Faculty Researcher',
+        'alumni_police_partner' => 'Alumni / Police Partner',
+        'super_admin' => 'Super Administrator'
+    ];
+    return $map[$r] ?? str_replace('_', ' ', $r);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -169,7 +223,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Management - Green Forensics</title>
     <!-- CSS Stylesheet -->
-    <link rel="stylesheet" href="../css/admin_style.css?v=1.5">
+    <link rel="stylesheet" href="../css/admin_style.css?v=1.6">
     <!-- Google Fonts Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -199,104 +253,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     <div class="admin-wrapper">
         <!-- SIDEBAR NAVIGATION -->
-        <aside class="admin-sidebar" id="sidebar">
-            <div class="sidebar-brand">
-                <div class="brand-text">
-                    <span>GREEN</span><span class="brand-accent">FORENSICS</span>
-                </div>
-            </div>
-
-            <div class="sidebar-user">
-                <div class="user-info">
-                    <div class="user-avatar">SA</div>
-                    <div class="user-details">
-                        <h4><?php echo htmlspecialchars($_SESSION["user_name"]); ?></h4>
-                        <span>Super Admin</span>
-                    </div>
-                </div>
-            </div>
-
-            <ul class="sidebar-menu">
-                <li class="menu-item">
-                    <a href="admin_dashboard.php" class="menu-link">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="3" width="7" height="9"></rect>
-                            <rect x="14" y="3" width="7" height="5"></rect>
-                            <rect x="14" y="12" width="7" height="9"></rect>
-                            <rect x="3" y="16" width="7" height="5"></rect>
-                        </svg>
-                        <span>Dashboard</span>
-                    </a>
-                </li>
-                <li class="menu-item">
-                    <a href="admin_pending.php" class="menu-link">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <polyline points="12 6 12 12 16 14"></polyline>
-                        </svg>
-                        <span>Pending Approvals</span>
-                    </a>
-                </li>
-                <li class="menu-item active">
-                    <a href="admin_users.php" class="menu-link">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                        </svg>
-                        <span>User Management</span>
-                    </a>
-                </li>
-                <li class="menu-item">
-                    <a href="admin_records.php" class="menu-link">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="16" y1="13" x2="8" y2="13"></line>
-                            <line x1="16" y1="17" x2="8" y2="17"></line>
-                            <polyline points="10 9 9 9 8 9"></polyline>
-                        </svg>
-                        <span>Records</span>
-                    </a>
-                </li>
-                <li class="menu-item">
-                    <a href="admin_reports.php" class="menu-link">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
-                            <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
-                        </svg>
-                        <span>Reports</span>
-                    </a>
-                </li>
-                <li class="menu-item">
-                    <a href="admin_security.php" class="menu-link">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                        </svg>
-                        <span>Security / Backup</span>
-                    </a>
-                </li>
-            </ul>
-
-            <div class="sidebar-footer">
-                <a href="../logout.php" class="menu-link" style="color: #e07a5f;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                        <polyline points="16 17 21 12 16 7"></polyline>
-                        <line x1="21" y1="12" x2="9" y2="12"></line>
-                    </svg>
-                    <span>Logout</span>
-                </a>
-            </div>
-        </aside>
+        <?php include "sidebar.php"; ?>
 
         <!-- MAIN LAYOUT CONTENT -->
         <main class="admin-main">
@@ -312,20 +269,8 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         </svg>
                     </button>
                     <div class="header-title">
-                        <h2>Green Forensics Evaluating System</h2>
+                        <h2>Green Forensics — Super Administrator Dashboard</h2>
                     </div>
-                </div>
-
-                <div class="header-right">
-                    <a href="../logout.php" class="header-logout">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-                            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                            <polyline points="16 17 21 12 16 7"></polyline>
-                            <line x1="21" y1="12" x2="9" y2="12"></line>
-                        </svg>
-                        <span>Sign Out</span>
-                    </a>
                 </div>
             </header>
 
@@ -333,7 +278,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <div class="admin-content">
                 <div class="page-header-wrap">
                     <div class="page-title">
-                        <h1>User Account Management</h1>
+                        <h1>User Management</h1>
                         <p>Create, update, activate, and manage all Green Forensics system user credentials.</p>
                     </div>
                     <div>
@@ -361,17 +306,28 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <form method="GET" action="admin_users.php" class="search-filter-bar">
                         <div class="bar-left">
                             <input type="text" name="search" class="form-control-inline"
-                                placeholder="Search by name or email..."
-                                value="<?php echo htmlspecialchars($search); ?>" style="min-width: 280px;">
+                                placeholder="Search by name, email, department..."
+                                value="<?php echo htmlspecialchars($search); ?>" style="min-width: 250px;">
+                            
+                            <select name="role" class="form-control-inline">
+                                <option value="">All Roles</option>
+                                <option value="super_admin" <?php echo $filter_role === 'super_admin' ? 'selected' : ''; ?>>Super Administrator</option>
+                                <option value="faculty_researcher" <?php echo $filter_role === 'faculty_researcher' ? 'selected' : ''; ?>>Faculty Researcher</option>
+                                <option value="criminology_student" <?php echo $filter_role === 'criminology_student' ? 'selected' : ''; ?>>Criminology Student</option>
+                                <option value="alumni_police_partner" <?php echo $filter_role === 'alumni_police_partner' ? 'selected' : ''; ?>>Alumni / Police Partner</option>
+                            </select>
+
                             <select name="status" class="form-control-inline">
                                 <option value="">All Statuses</option>
-                                <option value="active" <?php echo $filter_status === 'active' ? 'selected' : ''; ?>>Active
-                                    Only</option>
-                                <option value="inactive" <?php echo $filter_status === 'inactive' ? 'selected' : ''; ?>>
-                                    Inactive Only</option>
+                                <option value="active" <?php echo $filter_status === 'active' ? 'selected' : ''; ?>>Active</option>
+                                <option value="inactive" <?php echo $filter_status === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                                <option value="pending" <?php echo $filter_status === 'pending' ? 'selected' : ''; ?>>Pending</option>
+                                <option value="rejected" <?php echo $filter_status === 'rejected' ? 'selected' : ''; ?>>Rejected</option>
+                                <option value="suspended" <?php echo $filter_status === 'suspended' ? 'selected' : ''; ?>>Suspended</option>
                             </select>
+
                             <button type="submit" class="btn btn-secondary">Filter</button>
-                            <?php if (!empty($search) || !empty($filter_status)): ?>
+                            <?php if (!empty($search) || !empty($filter_status) || !empty($filter_role)): ?>
                                 <a href="admin_users.php" class="btn btn-secondary btn-sm" style="border: none;">Clear</a>
                             <?php endif; ?>
                         </div>
@@ -384,12 +340,12 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <table class="custom-table">
                             <thead>
                                 <tr>
-                                    <th>ID</th>
-                                    <th>Full Name</th>
+                                    <th>Name</th>
                                     <th>Email Address</th>
                                     <th>Role</th>
+                                    <th>Department / Affiliation</th>
                                     <th>Status</th>
-                                    <th>Created Date</th>
+                                    <th>Date Created</th>
                                     <th style="text-align: right;">Actions</th>
                                 </tr>
                             </thead>
@@ -397,13 +353,18 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <?php if (count($users) > 0): ?>
                                     <?php foreach ($users as $user): ?>
                                         <tr>
-                                            <td><?php echo $user['id']; ?></td>
                                             <td style="font-weight: 600; color: var(--dark-green);">
                                                 <?php echo htmlspecialchars($user['full_name']); ?>
                                             </td>
                                             <td><?php echo htmlspecialchars($user['email']); ?></td>
-                                            <td><span
-                                                    style="font-size:.75rem;font-weight:700;text-transform:capitalize;color:#6c757d;"><?php echo str_replace('_', ' ', $user['role'] ?? '—'); ?></span>
+                                            <td>
+                                                <span style="font-size:.75rem; font-weight:700; color:#6B8F71;">
+                                                    <?php echo role_label($user['role'] ?? ''); ?>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span style="display:block; font-weight:500;"><?php echo htmlspecialchars($user['department'] ?: '—'); ?></span>
+                                                <span style="font-size:.75rem; color:#888;"><?php echo htmlspecialchars($user['affiliation'] ?: '—'); ?></span>
                                             </td>
                                             <td>
                                                 <span class="badge badge-<?php echo $user['status']; ?>">
@@ -432,7 +393,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
                                                     <!-- Edit User Info Button -->
                                                     <button class="icon-btn" title="Edit account details"
-                                                        onclick="openEditModal(<?php echo $user['id']; ?>, '<?php echo htmlspecialchars($user['full_name'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars($user['email'], ENT_QUOTES); ?>', '<?php echo $user['status']; ?>')">
+                                                        onclick="openEditModal(<?php echo $user['id']; ?>, '<?php echo htmlspecialchars($user['full_name'], ENT_QUOTES); ?>', '<?php echo htmlspecialchars($user['email'], ENT_QUOTES); ?>', '<?php echo $user['role']; ?>', '<?php echo htmlspecialchars($user['department'] ?? '', ENT_QUOTES); ?>', '<?php echo htmlspecialchars($user['affiliation'] ?? '', ENT_QUOTES); ?>', '<?php echo $user['status']; ?>')">
                                                         <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
                                                             stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
                                                             stroke-linejoin="round">
@@ -529,10 +490,22 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         </select>
                     </div>
                     <div class="form-group">
+                        <label for="add_department">Department</label>
+                        <input type="text" name="department" id="add_department" class="form-control"
+                            placeholder="e.g. Criminology Dept">
+                    </div>
+                    <div class="form-group">
+                        <label for="add_affiliation">Affiliation</label>
+                        <input type="text" name="affiliation" id="add_affiliation" class="form-control"
+                            placeholder="e.g. LSPU CCJE / Police Force">
+                    </div>
+                    <div class="form-group">
                         <label for="add_status">Account Status</label>
                         <select name="status" id="add_status" class="form-control">
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
+                            <option value="pending">Pending</option>
+                            <option value="suspended">Suspended</option>
                         </select>
                     </div>
                 </div>
@@ -564,10 +537,30 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <input type="email" name="email" id="edit_email" class="form-control" required>
                     </div>
                     <div class="form-group">
+                        <label for="edit_role">Role</label>
+                        <select name="role" id="edit_role" class="form-control">
+                            <option value="criminology_student">Criminology Student</option>
+                            <option value="faculty_researcher">Faculty Researcher</option>
+                            <option value="alumni_police_partner">Alumni / Police Partner</option>
+                            <option value="super_admin">Super Admin</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_department">Department</label>
+                        <input type="text" name="department" id="edit_department" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_affiliation">Affiliation</label>
+                        <input type="text" name="affiliation" id="edit_affiliation" class="form-control">
+                    </div>
+                    <div class="form-group">
                         <label for="edit_status">Account Status</label>
                         <select name="status" id="edit_status" class="form-control">
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
+                            <option value="pending">Pending</option>
+                            <option value="suspended">Suspended</option>
+                            <option value="rejected">Rejected</option>
                         </select>
                     </div>
                 </div>
@@ -638,10 +631,13 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
             document.getElementById("addModal").classList.remove("active");
         }
 
-        function openEditModal(id, name, email, status) {
+        function openEditModal(id, name, email, role, department, affiliation, status) {
             document.getElementById("edit_id").value = id;
             document.getElementById("edit_name").value = name;
             document.getElementById("edit_email").value = email;
+            document.getElementById("edit_role").value = role;
+            document.getElementById("edit_department").value = department;
+            document.getElementById("edit_affiliation").value = affiliation;
             document.getElementById("edit_status").value = status;
             document.getElementById("editModal").classList.add("active");
         }

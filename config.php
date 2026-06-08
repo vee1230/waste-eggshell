@@ -218,6 +218,59 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     // ============================================================
+    // 10b. Create ACTIVITY_LOGS table
+    // ============================================================
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `activity_logs` (
+        `id`          INT AUTO_INCREMENT PRIMARY KEY,
+        `user_id`     INT DEFAULT NULL,
+        `user_email`  VARCHAR(150) NOT NULL,
+        `action`      VARCHAR(100) NOT NULL,
+        `details`     TEXT NOT NULL,
+        `ip_address`  VARCHAR(45) DEFAULT NULL,
+        `user_agent`  VARCHAR(255) DEFAULT NULL,
+        `created_at`  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // ============================================================
+    // 10c. Create BACKUP_HISTORY table
+    // ============================================================
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `backup_history` (
+        `id`          INT AUTO_INCREMENT PRIMARY KEY,
+        `filename`    VARCHAR(255) NOT NULL,
+        `status`      ENUM('success','failed') DEFAULT 'success',
+        `created_by`  INT DEFAULT NULL,
+        `created_at`  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (`created_by`) REFERENCES `users`(`id`) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // ============================================================
+    // 10d. Create SYSTEM_SETTINGS table
+    // ============================================================
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `system_settings` (
+        `setting_key`   VARCHAR(100) PRIMARY KEY,
+        `setting_value` TEXT NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // Seed default settings if they do not exist
+    $defaultSettings = [
+        'system_name' => 'Green Forensics Evaluating System',
+        'system_email' => 'admin@greenforensics.edu.ph',
+        'allowed_registration_roles' => 'criminology_student,faculty_researcher,alumni_police_partner',
+        'maintenance_mode' => '0',
+        'max_login_attempts' => '5',
+        'lockout_time' => '15'
+    ];
+    $checkSetting = $pdo->prepare("SELECT COUNT(*) FROM `system_settings` WHERE `setting_key` = :key");
+    $insertSetting = $pdo->prepare("INSERT INTO `system_settings` (`setting_key`, `setting_value`) VALUES (:key, :val)");
+    foreach ($defaultSettings as $key => $val) {
+        $checkSetting->execute([':key' => $key]);
+        if ($checkSetting->fetchColumn() == 0) {
+            $insertSetting->execute([':key' => $key, ':val' => $val]);
+        }
+    }
+
+    // ============================================================
     // 11. Seed default accounts using INSERT IGNORE
     //    Always runs — skips silently if email already exists.
     //    super_admin: admin123 | faculty: faculty123 | student: student123

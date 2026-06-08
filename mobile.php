@@ -292,20 +292,24 @@ if (isset($_SESSION["logged_in"]) && $_SESSION["logged_in"] === true) {
                     align-items: center;
                     margin-top: 2rem;
                 }
-                .latent-col-left, .latent-col-right {
+
+                .latent-col-left,
+                .latent-col-right {
                     display: flex;
                     flex-direction: column;
                     gap: 2rem;
                 }
+
                 /* Clean Glass Image Card */
                 .glass-card-clean {
                     background: #fff;
                     border-radius: 20px;
                     overflow: hidden;
-                    box-shadow: 0 10px 30px rgba(0,0,0,0.04);
-                    border: 1px solid rgba(0,0,0,0.04);
+                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+                    border: 1px solid rgba(0, 0, 0, 0.04);
                     position: relative;
                 }
+
                 .glass-img-bg {
                     width: 100%;
                     height: 280px;
@@ -313,11 +317,12 @@ if (isset($_SESSION["logged_in"]) && $_SESSION["logged_in"] === true) {
                     background-size: cover;
                     background-position: center;
                 }
+
                 .glass-label-badge {
                     position: absolute;
                     top: 1.5rem;
                     left: 1.5rem;
-                    background: rgba(255,255,255,0.95);
+                    background: rgba(255, 255, 255, 0.95);
                     padding: 6px 14px;
                     border-radius: 20px;
                     font-size: 0.75rem;
@@ -325,39 +330,45 @@ if (isset($_SESSION["logged_in"]) && $_SESSION["logged_in"] === true) {
                     letter-spacing: 1px;
                     color: var(--dark-green);
                     text-transform: uppercase;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+                    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
                 }
+
                 /* Minimal Camera Preview Card */
                 .camera-preview-clean {
                     background: #fafaf8;
                     border-radius: 20px;
                     padding: 2.5rem;
-                    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05);
+                    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
                     text-align: center;
                 }
+
                 .camera-preview-clean h3 {
                     color: var(--dark-green);
                     font-size: 1.3rem;
                     margin-bottom: 0.5rem;
                 }
-                .camera-preview-clean > p {
+
+                .camera-preview-clean>p {
                     color: #666;
                     font-size: 0.95rem;
                     margin-bottom: 2rem;
                 }
+
                 .preview-box-ui {
                     background: #fff;
-                    border: 2px dashed rgba(0,0,0,0.1);
+                    border: 2px dashed rgba(0, 0, 0, 0.1);
                     border-radius: 12px;
                     padding: 2.5rem 1rem;
                     margin-bottom: 2rem;
                     color: #888;
                 }
+
                 .preview-btns {
                     display: flex;
                     gap: 1rem;
                     margin-bottom: 1rem;
                 }
+
                 .preview-btns button {
                     flex: 1;
                     padding: 12px;
@@ -371,22 +382,27 @@ if (isset($_SESSION["logged_in"]) && $_SESSION["logged_in"] === true) {
                     gap: 6px;
                     transition: all 0.2s ease;
                 }
+
                 .btn-green-light {
                     background: rgba(46, 125, 50, 0.1);
                     color: var(--dark-green);
                     border: none;
                 }
+
                 .btn-green-light:hover {
                     background: rgba(46, 125, 50, 0.15);
                 }
+
                 .btn-outline {
                     background: transparent;
-                    border: 1px solid rgba(0,0,0,0.15);
+                    border: 1px solid rgba(0, 0, 0, 0.15);
                     color: #555;
                 }
+
                 .btn-outline:hover {
-                    background: rgba(0,0,0,0.03);
+                    background: rgba(0, 0, 0, 0.03);
                 }
+
                 .btn-solid-green {
                     width: 100%;
                     background: var(--dark-green);
@@ -405,9 +421,11 @@ if (isset($_SESSION["logged_in"]) && $_SESSION["logged_in"] === true) {
                     text-decoration: none;
                     transition: all 0.2s ease;
                 }
+
                 .btn-solid-green:hover {
                     opacity: 0.9;
                 }
+
                 /* Info Cards on Right */
                 .intro-text-clean {
                     font-size: 1.1rem;
@@ -415,29 +433,34 @@ if (isset($_SESSION["logged_in"]) && $_SESSION["logged_in"] === true) {
                     color: #555;
                     margin-bottom: 0.5rem;
                 }
+
                 .info-card-clean {
                     background: #fff;
                     border-radius: 16px;
                     padding: 1.8rem;
-                    box-shadow: 0 8px 30px rgba(0,0,0,0.03);
-                    border: 1px solid rgba(0,0,0,0.04);
+                    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.03);
+                    border: 1px solid rgba(0, 0, 0, 0.04);
                     border-left: 4px solid var(--soft-green);
                     transition: transform 0.3s ease;
                 }
+
                 .info-card-clean:hover {
                     transform: translateX(5px);
                 }
+
                 .info-card-clean h4 {
                     color: var(--dark-green);
                     font-size: 1.1rem;
                     margin-bottom: 0.5rem;
                 }
+
                 .info-card-clean p {
                     color: #666;
                     font-size: 0.95rem;
                     line-height: 1.5;
                     margin: 0;
                 }
+
                 @media(max-width: 992px) {
                     .latent-redesign {
                         grid-template-columns: 1fr;
@@ -457,43 +480,79 @@ if (isset($_SESSION["logged_in"]) && $_SESSION["logged_in"] === true) {
 
                     <!-- Camera Preview Card -->
                     <div class="camera-preview-clean">
-                        <span style="display: inline-block; padding: 4px 12px; background: rgba(46, 125, 50, 0.1); color: var(--dark-green); border-radius: 20px; font-size: 0.75rem; font-weight: 700; margin-bottom: 1rem;">PREVIEW ONLY</span>
+                        <span
+                            style="display: inline-block; padding: 4px 12px; background: rgba(46, 125, 50, 0.1); color: var(--dark-green); border-radius: 20px; font-size: 0.75rem; font-weight: 700; margin-bottom: 1rem;">PREVIEW
+                            ONLY</span>
                         <h3>Camera-Based Evaluation Preview</h3>
                         <p>Visual preview of the secured student dashboard feature.</p>
-                        
+
                         <div class="preview-box-ui">
-                            <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 10px; opacity: 0.6;">
-                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                            <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor"
+                                stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+                                style="margin-bottom: 10px; opacity: 0.6;">
+                                <path
+                                    d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z">
+                                </path>
                                 <circle cx="12" cy="13" r="4"></circle>
                             </svg>
-                            <div style="font-weight: 600; color: #555; margin-bottom: 6px; font-size: 0.95rem;">Camera Preview / Uploaded Image</div>
+                            <div style="font-weight: 600; color: #555; margin-bottom: 6px; font-size: 0.95rem;">Camera
+                                Preview / Uploaded Image</div>
                             <div style="font-size: 0.8rem; color: #999;">Preview Mode Only</div>
                         </div>
 
                         <div class="preview-btns">
-                            <button class="btn-green-light" onclick="alert('Please login to access the secured camera-based evaluation feature.')">
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                            <button class="btn-green-light"
+                                onclick="alert('Please login to access the secured camera-based evaluation feature.')">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path
+                                        d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z">
+                                    </path>
+                                    <circle cx="12" cy="13" r="4"></circle>
+                                </svg>
                                 START CAMERA
                             </button>
-                            <button class="btn-outline" onclick="alert('Please login to access the secured camera-based evaluation feature.')">
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                            <button class="btn-outline"
+                                onclick="alert('Please login to access the secured camera-based evaluation feature.')">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
                                 UPLOAD FILE
                             </button>
                         </div>
 
-                        <button class="btn-solid-green" onclick="alert('Please login to access the secured camera-based evaluation feature.')">
+                        <button class="btn-solid-green"
+                            onclick="alert('Please login to access the secured camera-based evaluation feature.')">
                             EVALUATE PRINT CLARITY
-                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="9 11 12 14 22 4"></polyline>
+                                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                            </svg>
                         </button>
 
                         <div style="border-top: 1px solid rgba(0,0,0,0.06); padding-top: 1.5rem; margin-top: 1rem;">
-                            <p style="font-size: 0.85rem; color: #666; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                                Fingerprint images are protected through login authentication and role-based access control.
+                            <p
+                                style="font-size: 0.85rem; color: #666; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                </svg>
+                                Fingerprint images are protected through login authentication and role-based access
+                                control.
                             </p>
-                            <a href="login.php" class="btn-solid-green" style="margin-bottom: 0; margin-top: 1.5rem; background: #222;">
+                            <a href="login.php" class="btn-solid-green"
+                                style="margin-bottom: 0; margin-top: 1.5rem; background: #222;">
                                 LOGIN TO USE CAMERA-BASED EVALUATION
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M5 12h14"></path>
+                                    <path d="m12 5 7 7-7 7"></path>
+                                </svg>
                             </a>
                         </div>
                     </div>
@@ -502,7 +561,8 @@ if (isset($_SESSION["logged_in"]) && $_SESSION["logged_in"] === true) {
                 <!-- Right Column -->
                 <div class="latent-col-right">
                     <p class="intro-text-clean">
-                        Our sustainable eggshell-based powder is designed to be applied on common test surfaces to help reveal latent fingerprints for classroom, laboratory, and simulation-based evaluation.
+                        Our sustainable eggshell-based powder is designed to be applied on common test surfaces to help
+                        reveal latent fingerprints for classroom, laboratory, and simulation-based evaluation.
                     </p>
 
                     <div class="info-card-clean">
@@ -512,7 +572,8 @@ if (isset($_SESSION["logged_in"]) && $_SESSION["logged_in"] === true) {
 
                     <div class="info-card-clean">
                         <h4>Visibility</h4>
-                        <p>Fine calcium carbonate particles adhere to fingerprint residues, revealing ridge patterns.</p>
+                        <p>Fine calcium carbonate particles adhere to fingerprint residues, revealing ridge patterns.
+                        </p>
                     </div>
 
                     <div class="info-card-clean">

@@ -8,50 +8,75 @@ check_admin_auth();
 
 // Fetch dynamic counts with fallbacks
 $total_users = 0;
-$total_trials = 142; // Fallback default
-$total_images = 86;  // Fallback default
-$total_reports = 18;  // Fallback default
-
 $pending_count = 0;
+$active_users = 0;
+$suspended_rejected_users = 0;
+$total_trials = 0;
+$total_images = 0;
+$total_reports = 0;
+$total_activities = 0;
+
 try {
-    // 1. Count actual users
+    // 1. Total users
     $stmt = $pdo->query("SELECT COUNT(*) FROM users");
-    $total_users = $stmt->fetchColumn();
+    $total_users = (int)$stmt->fetchColumn();
 
-    // 2. Count pending registrations
-    $stmt2 = $pdo->query("SELECT COUNT(*) FROM users WHERE status='pending'");
-    $pending_count = $stmt2 ? (int)$stmt2->fetchColumn() : 0;
+    // 2. Pending approvals
+    $stmt = $pdo->query("SELECT COUNT(*) FROM users WHERE status='pending'");
+    $pending_count = (int)$stmt->fetchColumn();
 
-    // 3. Count trials if table exists
+    // 3. Active users
+    $stmt = $pdo->query("SELECT COUNT(*) FROM users WHERE status='active'");
+    $active_users = (int)$stmt->fetchColumn();
+
+    // 4. Suspended / Rejected users
+    $stmt = $pdo->query("SELECT COUNT(*) FROM users WHERE status IN ('suspended', 'rejected')");
+    $suspended_rejected_users = (int)$stmt->fetchColumn();
+
+    // 5. Fingerprint trials
     $stmt = $pdo->query("SELECT COUNT(*) FROM fingerprint_tests");
-    if ($stmt) {
-        $db_trials = $stmt->fetchColumn();
-        if ($db_trials > 0)
-            $total_trials = $db_trials;
-    }
-} catch (PDOException $e) {
-    // Suppress and use fallbacks if tables don't exist yet
-}
+    $total_trials = (int)$stmt->fetchColumn();
 
-try {
-    // 3. Count reports if table exists
+    // 6. Uploaded images
+    $stmt = $pdo->query("SELECT COUNT(*) FROM fingerprint_images");
+    $total_images = (int)$stmt->fetchColumn();
+
+    // 7. Reports generated
     $stmt = $pdo->query("SELECT COUNT(*) FROM reports");
-    if ($stmt) {
-        $db_reports = $stmt->fetchColumn();
-        if ($db_reports > 0)
-            $total_reports = $db_reports;
-    }
+    $total_reports = (int)$stmt->fetchColumn();
+
+    // 8. Total activity logs
+    $stmt = $pdo->query("SELECT COUNT(*) FROM activity_logs");
+    $total_activities = (int)$stmt->fetchColumn();
 } catch (PDOException $e) {
-    // Suppress and use fallbacks
+    // Fallbacks
 }
 
-// Set up recent activities
-$activities = [
-    ['type' => 'security', 'detail' => 'Super Administrator logged in', 'time' => 'Just now', 'user' => $_SESSION["user_name"]],
-    ['type' => 'add', 'detail' => 'Created user account: jcreyes@greenforensics.edu.ph', 'time' => '2 hours ago', 'user' => 'System'],
-    ['type' => 'edit', 'detail' => 'Updated password for msantos@greenforensics.edu.ph', 'time' => 'Yesterday', 'user' => 'System'],
-    ['type' => 'security', 'detail' => 'Database backup created successfully', 'time' => 'May 25, 2026', 'user' => 'System Run']
-];
+// Fetch maintenance mode from settings
+$maintenance_mode = "OFF";
+try {
+    $stmt = $pdo->prepare("SELECT setting_value FROM system_settings WHERE setting_key = 'maintenance_mode' LIMIT 1");
+    $stmt->execute();
+    $m_val = $stmt->fetchColumn();
+    if ($m_val === "1") {
+        $maintenance_mode = "ON";
+    }
+} catch (PDOException $e) {}
+
+// Fetch recent activity logs (real logs from DB)
+$activities = [];
+try {
+    $stmt = $pdo->query("SELECT * FROM activity_logs ORDER BY created_at DESC LIMIT 5");
+    $activities = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {}
+
+// Fallback logic for activity logs if empty
+if (empty($activities)) {
+    $activities = [
+        ['action' => 'security', 'details' => 'Super Administrator logged in', 'created_at' => date('Y-m-d H:i:s'), 'user_email' => $_SESSION["user_email"] ?? 'admin@greenforensics.com'],
+        ['action' => 'system', 'details' => 'System activity log database initialized', 'created_at' => date('Y-m-d H:i:s'), 'user_email' => 'system']
+    ];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -59,115 +84,42 @@ $activities = [
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super Admin Dashboard - Green Forensics</title>
+    <title>Green Forensics — Super Administrator Dashboard</title>
     <!-- CSS Stylesheet -->
-    <link rel="stylesheet" href="../css/admin_style.css?v=1.5">
+    <link rel="stylesheet" href="../css/admin_style.css?v=1.6">
     <!-- Google Fonts Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        .stat-card.users-card::after { background-color: var(--medium-green); }
+        .stat-card.pending-card::after { background-color: var(--warning); }
+        .stat-card.active-card::after { background-color: var(--soft-green); }
+        .stat-card.suspended-card::after { background-color: var(--danger); }
+        
+        .stat-card.pending-card .stat-icon { background: rgba(244, 162, 97, 0.1); color: var(--warning); }
+        .stat-card.active-card .stat-icon { background: rgba(82, 183, 136, 0.1); color: var(--soft-green); }
+        .stat-card.suspended-card .stat-icon { background: rgba(224, 122, 95, 0.1); color: var(--danger); }
+
+        .stat-card.trials-card::after { background-color: #2a6f97; }
+        .stat-card.trials-card .stat-icon { background: rgba(42, 111, 151, 0.1); color: #2a6f97; }
+        
+        .stat-card.images-card::after { background-color: #4a5759; }
+        .stat-card.images-card .stat-icon { background: rgba(74, 87, 89, 0.1); color: #4a5759; }
+
+        .stat-card.reports-card::after { background-color: #7251b5; }
+        .stat-card.reports-card .stat-icon { background: rgba(114, 81, 181, 0.1); color: #7251b5; }
+
+        .stat-card.activity-card::after { background-color: #1d3557; }
+        .stat-card.activity-card .stat-icon { background: rgba(29, 53, 87, 0.1); color: #1d3557; }
+
+        .dot-orange { background-color: var(--warning); }
+    </style>
 </head>
 
 <body>
 
     <div class="admin-wrapper">
         <!-- SIDEBAR NAVIGATION -->
-        <aside class="admin-sidebar" id="sidebar">
-            <div class="sidebar-brand">
-                <div class="brand-text">
-                    <span>GREEN</span><span class="brand-accent">FORENSICS</span>
-                </div>
-            </div>
-
-            <div class="sidebar-user">
-                <div class="user-info">
-                    <div class="user-avatar">SA</div>
-                    <div class="user-details">
-                        <h4><?php echo htmlspecialchars($_SESSION["user_name"]); ?></h4>
-                        <span>Super Admin</span>
-                    </div>
-                </div>
-            </div>
-
-            <ul class="sidebar-menu">
-                <li class="menu-item active">
-                    <a href="admin_dashboard.php" class="menu-link">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="3" width="7" height="9"></rect>
-                            <rect x="14" y="3" width="7" height="5"></rect>
-                            <rect x="14" y="12" width="7" height="9"></rect>
-                            <rect x="3" y="16" width="7" height="5"></rect>
-                        </svg>
-                        <span>Dashboard</span>
-                    </a>
-                </li>
-                <li class="menu-item">
-                    <a href="admin_pending.php" class="menu-link" style="position:relative;">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <polyline points="12 6 12 12 16 14"></polyline>
-                        </svg>
-                        <span>Pending Approvals<?php if ($pending_count > 0): ?> <span style="background:#e07a5f;color:#fff;border-radius:20px;font-size:.65rem;padding:1px 7px;font-weight:700;margin-left:4px;"><?php echo $pending_count; ?></span><?php endif; ?></span>
-                    </a>
-                </li>
-                <li class="menu-item">
-                    <a href="admin_users.php" class="menu-link">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                        </svg>
-                        <span>User Management</span>
-                    </a>
-                </li>
-                <li class="menu-item">
-                    <a href="admin_records.php" class="menu-link">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="16" y1="13" x2="8" y2="13"></line>
-                            <line x1="16" y1="17" x2="8" y2="17"></line>
-                            <polyline points="10 9 9 9 8 9"></polyline>
-                        </svg>
-                        <span>Records</span>
-                    </a>
-                </li>
-                <li class="menu-item">
-                    <a href="admin_reports.php" class="menu-link">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
-                            <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
-                        </svg>
-                        <span>Reports</span>
-                    </a>
-                </li>
-                <li class="menu-item">
-                    <a href="admin_security.php" class="menu-link">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                        </svg>
-                        <span>Security / Backup</span>
-                    </a>
-                </li>
-            </ul>
-
-            <div class="sidebar-footer">
-                <a href="../logout.php" class="menu-link" style="color: #e07a5f;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                        <polyline points="16 17 21 12 16 7"></polyline>
-                        <line x1="21" y1="12" x2="9" y2="12"></line>
-                    </svg>
-                    <span>Logout</span>
-                </a>
-            </div>
-        </aside>
+        <?php include "sidebar.php"; ?>
 
         <!-- MAIN LAYOUT CONTENT -->
         <main class="admin-main">
@@ -183,11 +135,9 @@ $activities = [
                         </svg>
                     </button>
                     <div class="header-title">
-                        <h2>Green Forensics Evaluating System</h2>
+                        <h2>Green Forensics — Super Administrator Dashboard</h2>
                     </div>
                 </div>
-
-
             </header>
 
             <!-- Main Content Area -->
@@ -195,13 +145,14 @@ $activities = [
                 <div class="page-header-wrap">
                     <div class="page-title">
                         <h1>Dashboard Overview</h1>
-                        <p>Welcome back, Forensic Super Administrator. Here is your system health summary.</p>
+                        <p>System Administration, Authentication, Access Control, and Monitoring Panel</p>
                     </div>
                 </div>
 
-                <!-- METRICS GRID -->
-                <div class="stats-grid">
-                    <div class="stat-card">
+                <!-- METRICS GRID 1 (USER MANAGEMENT STATS) -->
+                <div class="stats-grid" style="margin-bottom: 1.5rem;">
+                    <!-- Total Users -->
+                    <div class="stat-card users-card">
                         <div class="stat-header">
                             <span class="stat-title">Total Users</span>
                             <div class="stat-icon">
@@ -209,28 +160,84 @@ $activities = [
                                     stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                                     <circle cx="9" cy="7" r="4"></circle>
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                                 </svg>
                             </div>
                         </div>
                         <div class="stat-value"><?php echo $total_users; ?></div>
-                        <div class="stat-desc">Registered user accounts</div>
+                        <div class="stat-desc">All registered credentials</div>
                     </div>
 
-                    <div class="stat-card">
+                    <!-- Pending Approvals -->
+                    <div class="stat-card pending-card">
+                        <div class="stat-header">
+                            <span class="stat-title">Pending Approvals</span>
+                            <div class="stat-icon">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+                                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="stat-value"><?php echo $pending_count; ?></div>
+                        <div class="stat-desc">Users awaiting review</div>
+                    </div>
+
+                    <!-- Active Users -->
+                    <div class="stat-card active-card">
+                        <div class="stat-header">
+                            <span class="stat-title">Active Users</span>
+                            <div class="stat-icon">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+                                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="stat-value"><?php echo $active_users; ?></div>
+                        <div class="stat-desc">Approved authorized accounts</div>
+                    </div>
+
+                    <!-- Suspended / Rejected Users -->
+                    <div class="stat-card suspended-card">
+                        <div class="stat-header">
+                            <span class="stat-title">Suspended / Rejected</span>
+                            <div class="stat-icon">
+                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+                                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                                    <line x1="12" y1="2" x2="12" y2="12"></line>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="stat-value"><?php echo $suspended_rejected_users; ?></div>
+                        <div class="stat-desc">Blocked or denied accounts</div>
+                    </div>
+                </div>
+
+                <!-- METRICS GRID 2 (FORENSIC ACTIVITY STATS) -->
+                <div class="stats-grid" style="margin-bottom: 2rem;">
+                    <!-- Fingerprint Trials -->
+                    <div class="stat-card trials-card">
                         <div class="stat-header">
                             <span class="stat-title">Fingerprint Trials</span>
                             <div class="stat-icon">
                                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
                                     stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                                    <circle cx="12" cy="11" r="3"></circle>
                                 </svg>
                             </div>
                         </div>
                         <div class="stat-value"><?php echo $total_trials; ?></div>
-                        <div class="stat-desc">Latent fingerprint extraction test trials</div>
+                        <div class="stat-desc">Total fingerprint tests logged</div>
                     </div>
 
-                    <div class="stat-card">
+                    <!-- Uploaded Images -->
+                    <div class="stat-card images-card">
                         <div class="stat-header">
                             <span class="stat-title">Uploaded Images</span>
                             <div class="stat-icon">
@@ -243,10 +250,11 @@ $activities = [
                             </div>
                         </div>
                         <div class="stat-value"><?php echo $total_images; ?></div>
-                        <div class="stat-desc">High resolution images in storage</div>
+                        <div class="stat-desc">Image assets in active storage</div>
                     </div>
 
-                    <div class="stat-card">
+                    <!-- Reports Generated -->
+                    <div class="stat-card reports-card">
                         <div class="stat-header">
                             <span class="stat-title">Reports Generated</span>
                             <div class="stat-icon">
@@ -258,40 +266,27 @@ $activities = [
                             </div>
                         </div>
                         <div class="stat-value"><?php echo $total_reports; ?></div>
-                        <div class="stat-desc">PDF evaluations downloaded</div>
+                        <div class="stat-desc">Evaluation files generated</div>
                     </div>
-                </div>
 
-                <div class="stats-grid" style="margin-bottom: 2rem;">
-                    <!-- Comparison Rates -->
-                    <div class="stat-card eggshell">
+                    <!-- Recent System Activities -->
+                    <div class="stat-card activity-card">
                         <div class="stat-header">
-                            <span class="stat-title">Eggshell Powder Success Rate</span>
+                            <span class="stat-title">System Activities</span>
                             <div class="stat-icon">
                                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
                                     stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
-                                    <polyline points="16 7 22 7 22 13"></polyline>
+                                    <line x1="8" y1="6" x2="21" y2="6"></line>
+                                    <line x1="8" y1="12" x2="21" y2="12"></line>
+                                    <line x1="8" y1="18" x2="21" y2="18"></line>
+                                    <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                                    <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                                    <line x1="3" y1="18" x2="3.01" y2="18"></line>
                                 </svg>
                             </div>
                         </div>
-                        <div class="stat-value">91.8%</div>
-                        <div class="stat-desc">Average forensic ridge clarity score</div>
-                    </div>
-
-                    <div class="stat-card commercial">
-                        <div class="stat-header">
-                            <span class="stat-title">Commercial Powder Success Rate</span>
-                            <div class="stat-icon">
-                                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
-                                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
-                                    <polyline points="16 7 22 7 22 13"></polyline>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="stat-value">88.4%</div>
-                        <div class="stat-desc">Standard carbon powder clarity benchmark</div>
+                        <div class="stat-value"><?php echo $total_activities; ?></div>
+                        <div class="stat-desc">System logs recorded in audit</div>
                     </div>
                 </div>
 
@@ -311,32 +306,49 @@ $activities = [
                         </div>
                         <ul class="activity-list">
                             <?php foreach ($activities as $act): ?>
+                                <?php 
+                                $act_type = 'security';
+                                $action_lower = strtolower($act['action'] ?? '');
+                                if (strpos($action_lower, 'add') !== false || strpos($action_lower, 'create') !== false || strpos($action_lower, 'register') !== false) {
+                                    $act_type = 'add';
+                                } elseif (strpos($action_lower, 'edit') !== false || strpos($action_lower, 'update') !== false || strpos($action_lower, 'reset') !== false || strpos($action_lower, 'change') !== false || strpos($action_lower, 'approve') !== false) {
+                                    $act_type = 'edit';
+                                } elseif (strpos($action_lower, 'delete') !== false || strpos($action_lower, 'remove') !== false || strpos($action_lower, 'reject') !== false || strpos($action_lower, 'suspend') !== false) {
+                                    $act_type = 'delete';
+                                }
+                                ?>
                                 <li class="activity-item">
-                                    <div class="activity-badge <?php echo $act['type']; ?>">
-                                        <?php if ($act['type'] === 'security'): ?>
+                                    <div class="activity-badge <?php echo $act_type; ?>">
+                                        <?php if ($act_type === 'security'): ?>
                                             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
                                                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                                             </svg>
-                                        <?php elseif ($act['type'] === 'add'): ?>
+                                        <?php elseif ($act_type === 'add'): ?>
                                             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
                                                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                                 <line x1="12" y1="5" x2="12" y2="19"></line>
                                                 <line x1="5" y1="12" x2="19" y2="12"></line>
                                             </svg>
-                                        <?php elseif ($act['type'] === 'edit'): ?>
+                                        <?php elseif ($act_type === 'edit'): ?>
                                             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
                                                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                                 <path d="M12 20h9"></path>
                                                 <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
                                             </svg>
+                                        <?php elseif ($act_type === 'delete'): ?>
+                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                                                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                                <polyline points="3 6 5 6 21 6"></polyline>
+                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+                                            </svg>
                                         <?php endif; ?>
                                     </div>
                                     <div class="activity-details">
-                                        <p><?php echo htmlspecialchars($act['detail']); ?></p>
-                                        <span>Triggered by <?php echo htmlspecialchars($act['user']); ?> &bull;
-                                            <?php echo $act['time']; ?></span>
+                                        <p><?php echo htmlspecialchars($act['details']); ?></p>
+                                        <span>Triggered by <?php echo htmlspecialchars($act['user_email']); ?> &bull;
+                                            <?php echo date('M d, Y h:i A', strtotime($act['created_at'])); ?></span>
                                     </div>
                                 </li>
                             <?php endforeach; ?>
@@ -359,10 +371,10 @@ $activities = [
                         </div>
                         <ul class="status-list">
                             <li class="status-item">
-                                <span class="status-label">Local Host (Apache)</span>
+                                <span class="status-label">Local Host / Server Status</span>
                                 <div class="status-value-indicator">
                                     <span class="dot dot-green"></span>
-                                    <span>ONLINE</span>
+                                    <span>ONLINE (Apache)</span>
                                 </div>
                             </li>
                             <li class="status-item">
@@ -374,7 +386,7 @@ $activities = [
                             </li>
                             <li class="status-item">
                                 <span class="status-label">Database Name</span>
-                                <div class="status-value-indicator" style="color: var(--medium-green);">
+                                <div class="status-value-indicator" style="color: var(--medium-green); font-weight:600;">
                                     <span>green_forensics</span>
                                 </div>
                             </li>
@@ -387,8 +399,11 @@ $activities = [
                             </li>
                             <li class="status-item">
                                 <span class="status-label">Maintenance Mode</span>
-                                <div class="status-value-indicator" style="color: var(--gray);">
-                                    <span>OFF</span>
+                                <div class="status-value-indicator" style="font-weight: 600; color: <?php echo ($maintenance_mode === 'ON') ? 'var(--danger)' : 'var(--gray)'; ?>;">
+                                    <?php if ($maintenance_mode === 'ON'): ?>
+                                        <span class="dot dot-orange"></span>
+                                    <?php endif; ?>
+                                    <span><?php echo $maintenance_mode; ?></span>
                                 </div>
                             </li>
                         </ul>

@@ -7,7 +7,7 @@ check_admin_auth();
 $error = "";
 $success = "";
 
-// Handle Approve / Reject / Edit Role actions
+// Handle Approve / Reject actions
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
     $action = $_POST["action"];
     $uid    = intval($_POST["user_id"] ?? 0);
@@ -18,17 +18,36 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST["action"])) {
             $error = "Please select a valid role to assign before approving.";
         } else {
             try {
+                // Get user details for logging
+                $u_stmt = $pdo->prepare("SELECT email, full_name FROM users WHERE id = :id LIMIT 1");
+                $u_stmt->execute([':id' => $uid]);
+                $user_info = $u_stmt->fetch(PDO::FETCH_ASSOC);
+                $u_email = $user_info ? $user_info['email'] : "ID $uid";
+
                 $stmt = $pdo->prepare("UPDATE users SET status='active', role=:role WHERE id=:id");
                 $stmt->execute([':role' => $approved_role, ':id' => $uid]);
+                
+                log_activity("Approve User", "Approved user registration for $u_email (assigned role: $approved_role)");
                 $success = "User account approved and role assigned successfully.";
-            } catch (PDOException $e) { $error = "Error: " . $e->getMessage(); }
+            } catch (PDOException $e) { 
+                $error = "Error: " . $e->getMessage(); 
+            }
         }
     } elseif ($action === "reject") {
         try {
+            // Get user details for logging
+            $u_stmt = $pdo->prepare("SELECT email FROM users WHERE id = :id LIMIT 1");
+            $u_stmt->execute([':id' => $uid]);
+            $u_email = $u_stmt->fetchColumn() ?: "ID $uid";
+
             $stmt = $pdo->prepare("UPDATE users SET status='rejected' WHERE id=:id");
             $stmt->execute([':id' => $uid]);
-            $success = "Registration rejected.";
-        } catch (PDOException $e) { $error = "Error: " . $e->getMessage(); }
+
+            log_activity("Reject User", "Rejected user registration for $u_email");
+            $success = "Registration request rejected successfully.";
+        } catch (PDOException $e) { 
+            $error = "Error: " . $e->getMessage(); 
+        }
     }
 }
 
@@ -57,8 +76,13 @@ $stmt->execute($params);
 $pending_users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 function role_label($r) {
-    $map = ['criminology_student'=>'Criminology Student','faculty_researcher'=>'Faculty Researcher','alumni_police_partner'=>'Alumni / Police Partner','super_admin'=>'Super Admin'];
-    return $map[$r] ?? str_replace('_',' ', $r);
+    $map = [
+        'criminology_student' => 'Criminology Student',
+        'faculty_researcher' => 'Faculty Researcher',
+        'alumni_police_partner' => 'Alumni / Police Partner',
+        'super_admin' => 'Super Administrator'
+    ];
+    return $map[$r] ?? str_replace('_', ' ', $r);
 }
 ?>
 <!DOCTYPE html>
@@ -67,7 +91,7 @@ function role_label($r) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pending Approvals - Green Forensics Admin</title>
-    <link rel="stylesheet" href="../css/admin_style.css?v=1.5">
+    <link rel="stylesheet" href="../css/admin_style.css?v=1.6">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         .alert { padding:.85rem 1.25rem; margin-bottom:1.5rem; border-radius:8px; font-size:.85rem; font-weight:500; }
@@ -77,78 +101,35 @@ function role_label($r) {
         .badge-active   { background:rgba(82,183,136,.15); color:#1e7e34; border:1px solid rgba(82,183,136,.25); padding:3px 10px; border-radius:20px; font-size:.7rem; font-weight:700; }
         .badge-rejected { background:rgba(220,53,69,.12); color:#c0392b; border:1px solid rgba(220,53,69,.2); padding:3px 10px; border-radius:20px; font-size:.7rem; font-weight:700; }
         .approve-form { display:inline-flex; gap:6px; align-items:center; }
-        .role-select-sm { padding:4px 8px; border-radius:6px; border:1.5px solid #ccc; font-size:.75rem; font-family:inherit; color:#2F4F3A; cursor:pointer; }
+        .role-select-sm { padding:6px 10px; border-radius:6px; border:1.5px solid #ccc; font-size:.75rem; font-family:inherit; color:#2F4F3A; cursor:pointer; background:#fff; }
         .role-select-sm:focus { border-color:#6B8F71; outline:none; }
-        .btn-approve { background:#2F4F3A; color:#fff; border:none; padding:5px 12px; border-radius:6px; font-size:.75rem; font-weight:700; cursor:pointer; transition:background .2s; }
-        .btn-approve:hover { background:#1F3F2A; }
-        .btn-reject  { background:transparent; color:#c0392b; border:1.5px solid #c0392b; padding:5px 10px; border-radius:6px; font-size:.75rem; font-weight:700; cursor:pointer; transition:all .2s; }
-        .btn-reject:hover { background:#c0392b; color:#fff; }
-        .btn-view    { background:transparent; color:#6B8F71; border:1.5px solid #6B8F71; padding:5px 10px; border-radius:6px; font-size:.75rem; font-weight:700; cursor:pointer; transition:all .2s; text-decoration:none; display:inline-block; }
+        .btn-approve { background:var(--medium-green); color:#fff; border:none; padding:6px 12px; border-radius:6px; font-size:.75rem; font-weight:700; cursor:pointer; transition:background .2s; }
+        .btn-approve:hover { background:var(--dark-green); }
+        .btn-reject  { background:transparent; color:var(--danger); border:1.5px solid var(--danger); padding:6px 10px; border-radius:6px; font-size:.75rem; font-weight:700; cursor:pointer; transition:all .2s; }
+        .btn-reject:hover { background:var(--danger); color:#fff; }
+        .btn-view    { background:transparent; color:#6B8F71; border:1.5px solid #6B8F71; padding:6px 10px; border-radius:6px; font-size:.75rem; font-weight:700; cursor:pointer; transition:all .2s; text-decoration:none; display:inline-block; }
         .btn-view:hover { background:#6B8F71; color:#fff; }
         .count-badge { background:rgba(47,79,58,.1); color:#2F4F3A; border-radius:20px; font-size:.75rem; font-weight:700; padding:2px 10px; margin-left:8px; }
 
         /* Detail modal */
-        .detail-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:9999; align-items:center; justify-content:center; }
+        .detail-overlay { display:none; position:fixed; inset:0; background:rgba(27, 67, 50, 0.45); backdrop-filter: blur(4px); z-index:9999; align-items:center; justify-content:center; }
         .detail-overlay.open { display:flex; }
-        .detail-modal { background:#fff; border-radius:16px; max-width:540px; width:92%; max-height:88vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.2); }
-        .detail-modal-header { padding:1.25rem 1.5rem; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; }
-        .detail-modal-header h3 { color:#2F4F3A; font-size:1rem; font-weight:700; }
+        .detail-modal { background:#fff; border-radius:16px; max-width:540px; width:92%; max-height:88vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.2); border: 1px solid rgba(27,67,50,0.1); }
+        .detail-modal-header { padding:1.25rem 1.5rem; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; background:var(--dark-green); color:#fff; }
+        .detail-modal-header h3 { color:#fff; font-size:1.05rem; font-weight:700; margin:0; }
         .detail-modal-body { padding:1.5rem; }
         .detail-row { display:flex; gap:.5rem; margin-bottom:.75rem; font-size:.85rem; }
-        .detail-label { min-width:140px; font-weight:600; color:#2F4F3A; }
-        .detail-value { color:#5F5F5F; flex:1; }
-        .modal-close-btn { background:none; border:none; font-size:1.4rem; cursor:pointer; color:#999; line-height:1; }
-        .modal-close-btn:hover { color:#2F4F3A; }
+        .detail-label { min-width:140px; font-weight:600; color:var(--dark-green); }
+        .detail-value { color:#5f5f5f; flex:1; }
+        .modal-close-btn { background:none; border:none; font-size:1.4rem; cursor:pointer; color:#fff; opacity:0.8; line-height:1; }
+        .modal-close-btn:hover { opacity:1; }
         .section-divider { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#6B8F71; border-bottom:1px solid #D2E2D5; padding-bottom:.35rem; margin:.75rem 0 .6rem; }
     </style>
 </head>
 <body>
 <div class="admin-wrapper">
     <!-- SIDEBAR -->
-    <aside class="admin-sidebar" id="sidebar">
-        <div class="sidebar-brand"><div class="brand-text"><span>GREEN</span><span class="brand-accent">FORENSICS</span></div></div>
-        <div class="sidebar-user">
-            <div class="user-info">
-                <div class="user-avatar">SA</div>
-                <div class="user-details">
-                    <h4><?php echo htmlspecialchars($_SESSION["user_name"]); ?></h4>
-                    <span>Super Admin</span>
-                </div>
-            </div>
-        </div>
-        <ul class="sidebar-menu">
-            <li class="menu-item"><a href="admin_dashboard.php" class="menu-link">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
-                <span>Dashboard</span></a>
-            </li>
-            <li class="menu-item active"><a href="admin_pending.php" class="menu-link">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                <span>Pending Approvals</span></a>
-            </li>
-            <li class="menu-item"><a href="admin_users.php" class="menu-link">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-                <span>User Management</span></a>
-            </li>
-            <li class="menu-item"><a href="admin_records.php" class="menu-link">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-                <span>Records</span></a>
-            </li>
-            <li class="menu-item"><a href="admin_reports.php" class="menu-link">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
-                <span>Reports</span></a>
-            </li>
-            <li class="menu-item"><a href="admin_security.php" class="menu-link">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                <span>Security / Backup</span></a>
-            </li>
-        </ul>
-        <div class="sidebar-footer">
-            <a href="../logout.php" class="menu-link" style="color:#e07a5f;">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                <span>Logout</span>
-            </a>
-        </div>
-    </aside>
+    <?php include "sidebar.php"; ?>
 
     <main class="admin-main">
         <header class="admin-header">
@@ -156,21 +137,15 @@ function role_label($r) {
                 <button class="menu-toggle" id="sidebarCollapse">
                     <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
                 </button>
-                <div class="header-title"><h2>Green Forensics Evaluating System</h2></div>
-            </div>
-            <div class="header-right">
-                <a href="../logout.php" class="header-logout">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                    <span>Sign Out</span>
-                </a>
+                <div class="header-title"><h2>Green Forensics — Super Administrator Dashboard</h2></div>
             </div>
         </header>
 
         <div class="admin-content">
             <div class="page-header-wrap">
                 <div class="page-title">
-                    <h1>Pending Approvals <span class="count-badge"><?php echo count($pending_users); ?> pending</span></h1>
-                    <p>Review and approve or reject new user registration requests before granting system access.</p>
+                    <h1>Pending User Approvals <span class="count-badge"><?php echo count($pending_users); ?> pending</span></h1>
+                    <p>Review registration requests and assign proper authentication roles to new users.</p>
                 </div>
             </div>
 
@@ -186,8 +161,8 @@ function role_label($r) {
                 <form method="GET" action="admin_pending.php" class="search-filter-bar">
                     <div class="bar-left">
                         <input type="text" name="search" class="form-control-inline"
-                            placeholder="Search by name, email, or ID number..."
-                            value="<?php echo htmlspecialchars($search); ?>" style="min-width:300px;">
+                            placeholder="Search pending users by name, email, or ID..."
+                            value="<?php echo htmlspecialchars($search); ?>" style="min-width:320px;">
                         <button type="submit" class="btn btn-secondary">Search</button>
                         <?php if (!empty($search)): ?>
                             <a href="admin_pending.php" class="btn btn-secondary btn-sm" style="border:none;">Clear</a>
@@ -232,25 +207,25 @@ function role_label($r) {
                                 <td style="text-align:right;">
                                     <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;align-items:center;">
                                         <!-- View Details -->
-                                        <a href="admin_pending.php?view=<?php echo $u['id']; ?><?php echo !empty($search) ? '&search='.urlencode($search) : ''; ?>" class="btn-view">View</a>
+                                        <a href="admin_pending.php?view=<?php echo $u['id']; ?><?php echo !empty($search) ? '&search='.urlencode($search) : ''; ?>" class="btn-view">View Details</a>
 
-                                        <!-- Approve with role selector -->
+                                        <!-- Approve Form -->
                                         <form method="POST" action="admin_pending.php" class="approve-form">
                                             <input type="hidden" name="action" value="approve">
                                             <input type="hidden" name="user_id" value="<?php echo $u['id']; ?>">
                                             <select name="approved_role" class="role-select-sm" required>
-                                                <option value="">Assign Role…</option>
-                                                <option value="criminology_student">Criminology Student</option>
-                                                <option value="faculty_researcher">Faculty Researcher</option>
-                                                <option value="alumni_police_partner">Alumni / Police Partner</option>
-                                                <option value="super_admin">Super Admin</option>
+                                                <option value="">Edit Assigned Role...</option>
+                                                <option value="criminology_student" <?php echo ($u['requested_role'] === 'criminology_student') ? 'selected' : ''; ?>>Criminology Student</option>
+                                                <option value="faculty_researcher" <?php echo ($u['requested_role'] === 'faculty_researcher') ? 'selected' : ''; ?>>Faculty Researcher</option>
+                                                <option value="alumni_police_partner" <?php echo ($u['requested_role'] === 'alumni_police_partner') ? 'selected' : ''; ?>>Alumni / Police Partner</option>
+                                                <option value="super_admin">Super Administrator</option>
                                             </select>
                                             <button type="submit" class="btn-approve">Approve</button>
                                         </form>
 
-                                        <!-- Reject -->
+                                        <!-- Reject Form -->
                                         <form method="POST" action="admin_pending.php" style="display:inline;"
-                                            onsubmit="return confirm('Reject this registration? The user will be notified their request was not approved.');">
+                                            onsubmit="return confirm('Are you sure you want to REJECT this registration request?');">
                                             <input type="hidden" name="action" value="reject">
                                             <input type="hidden" name="user_id" value="<?php echo $u['id']; ?>">
                                             <button type="submit" class="btn-reject">Reject</button>
@@ -275,7 +250,7 @@ function role_label($r) {
     </main>
 </div>
 
-<!-- VIEW DETAIL MODAL (auto-opened via PHP if ?view= is set) -->
+<!-- VIEW DETAIL MODAL -->
 <?php if ($view_user): ?>
 <div class="detail-overlay open" id="detailOverlay">
     <div class="detail-modal">
@@ -290,25 +265,25 @@ function role_label($r) {
             <div class="detail-row"><span class="detail-label">Email</span><span class="detail-value"><?php echo htmlspecialchars($view_user['email']); ?></span></div>
             <div class="detail-row"><span class="detail-label">Contact Number</span><span class="detail-value"><?php echo htmlspecialchars($view_user['contact_number'] ?? '—'); ?></span></div>
             <div class="detail-row"><span class="detail-label">Department</span><span class="detail-value"><?php echo htmlspecialchars($view_user['department'] ?? '—'); ?></span></div>
+            
             <p class="section-divider">Access Request</p>
             <div class="detail-row"><span class="detail-label">Requested Role</span><span class="detail-value"><?php echo role_label($view_user['requested_role'] ?? ''); ?></span></div>
             <div class="detail-row"><span class="detail-label">Reason for Access</span><span class="detail-value"><?php echo nl2br(htmlspecialchars($view_user['reason_for_access'] ?? '—')); ?></span></div>
             <div class="detail-row"><span class="detail-label">Registered On</span><span class="detail-value"><?php echo date('F d, Y g:i A', strtotime($view_user['created_at'])); ?></span></div>
-            <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value"><span class="badge-<?php echo $view_user['status']; ?>"><?php echo ucfirst($view_user['status']); ?></span></span></div>
+            <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value"><span class="badge-pending"><?php echo ucfirst($view_user['status']); ?></span></span></div>
 
             <?php if ($view_user['status'] === 'pending'): ?>
-            <div style="display:flex;gap:.75rem;margin-top:1.5rem;">
-                <form method="POST" action="admin_pending.php" class="approve-form" style="flex:1;">
+            <div style="display:flex;gap:.75rem;margin-top:1.5rem;border-top:1px solid #eee;padding-top:1.25rem;">
+                <form method="POST" action="admin_pending.php" class="approve-form" style="flex:1;display:flex;gap:6px;">
                     <input type="hidden" name="action" value="approve">
                     <input type="hidden" name="user_id" value="<?php echo $view_user['id']; ?>">
                     <select name="approved_role" class="role-select-sm" required style="flex:1;padding:8px;">
-                        <option value="">Assign Role…</option>
                         <option value="criminology_student" <?php echo $view_user['requested_role']==='criminology_student'?'selected':''; ?>>Criminology Student</option>
                         <option value="faculty_researcher" <?php echo $view_user['requested_role']==='faculty_researcher'?'selected':''; ?>>Faculty Researcher</option>
                         <option value="alumni_police_partner" <?php echo $view_user['requested_role']==='alumni_police_partner'?'selected':''; ?>>Alumni / Police Partner</option>
-                        <option value="super_admin">Super Admin</option>
+                        <option value="super_admin">Super Administrator</option>
                     </select>
-                    <button type="submit" class="btn-approve" style="padding:8px 16px;">Approve</button>
+                    <button type="submit" class="btn-approve" style="padding:8px 16px;">Approve Access</button>
                 </form>
                 <form method="POST" action="admin_pending.php" onsubmit="return confirm('Reject this registration?');">
                     <input type="hidden" name="action" value="reject">

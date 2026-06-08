@@ -6,93 +6,74 @@ require_once "auth.php";
 // Enforce admin authentication
 check_admin_auth();
 
-// Mock forensic trial records for Green Forensics Evaluating System
-$records = [
-    [
-        'id' => 1001,
-        'image' => 'egg_powder_glass_01.jpg',
-        'surface' => 'Glass',
-        'powder' => 'Eggshell Powder',
-        'accuracy' => 94,
-        'quality' => 'Excellent',
-        'date' => '2026-05-26 10:15:32'
-    ],
-    [
-        'id' => 1002,
-        'image' => 'comm_powder_glass_01.jpg',
-        'surface' => 'Glass',
-        'powder' => 'Commercial Carbon',
-        'accuracy' => 88,
-        'quality' => 'Very Good',
-        'date' => '2026-05-26 09:40:11'
-    ],
-    [
-        'id' => 1003,
-        'image' => 'egg_powder_steel_02.jpg',
-        'surface' => 'Stainless Steel',
-        'powder' => 'Eggshell Powder',
-        'accuracy' => 91,
-        'quality' => 'Excellent',
-        'date' => '2026-05-25 15:22:45'
-    ],
-    [
-        'id' => 1004,
-        'image' => 'egg_powder_wood_01.jpg',
-        'surface' => 'Varnished Wood',
-        'powder' => 'Eggshell Powder',
-        'accuracy' => 85,
-        'quality' => 'Good',
-        'date' => '2026-05-25 11:05:19'
-    ],
-    [
-        'id' => 1005,
-        'image' => 'comm_powder_wood_01.jpg',
-        'surface' => 'Varnished Wood',
-        'powder' => 'Commercial Carbon',
-        'accuracy' => 78,
-        'quality' => 'Fair',
-        'date' => '2026-05-24 16:30:00'
-    ],
-    [
-        'id' => 1006,
-        'image' => 'egg_powder_plastic_01.jpg',
-        'surface' => 'Acrylic Plastic',
-        'powder' => 'Eggshell Powder',
-        'accuracy' => 93,
-        'quality' => 'Excellent',
-        'date' => '2026-05-24 14:18:22'
-    ],
-    [
-        'id' => 1007,
-        'image' => 'comm_powder_plastic_01.jpg',
-        'surface' => 'Acrylic Plastic',
-        'powder' => 'Commercial Carbon',
-        'accuracy' => 86,
-        'quality' => 'Very Good',
-        'date' => '2026-05-24 13:55:04'
-    ],
-    [
-        'id' => 1008,
-        'image' => 'egg_powder_paper_01.jpg',
-        'surface' => 'Cardboard Paper',
-        'powder' => 'Eggshell Powder',
-        'accuracy' => 82,
-        'quality' => 'Good',
-        'date' => '2026-05-23 10:44:12'
-    ]
-];
-
-// Handle search and filtering
-$search_surface = isset($_GET["surface"]) ? trim($_GET["surface"]) : "";
+// Filtering inputs
+$search_student = isset($_GET["student"]) ? trim($_GET["student"]) : "";
 $filter_powder = isset($_GET["powder"]) ? trim($_GET["powder"]) : "";
+$filter_surface = isset($_GET["surface"]) ? trim($_GET["surface"]) : "";
+$filter_status = isset($_GET["status"]) ? trim($_GET["status"]) : "";
 
-$filtered_records = [];
-foreach ($records as $rec) {
-    $matches_surface = empty($search_surface) || (stripos($rec['surface'], $search_surface) !== false);
-    $matches_powder = empty($filter_powder) || ($rec['powder'] === $filter_powder);
+// Build SQL Query
+$query_str = "
+    SELECT 
+        ft.id, 
+        ft.powder_type, 
+        ft.surface_type, 
+        ft.fingerprint_image, 
+        ft.ridge_clarity_score,
+        ft.visibility_score,
+        ft.adhesion_score,
+        ft.accuracy_score, 
+        ft.notes,
+        ft.status, 
+        ft.submitted_at, 
+        u.full_name AS student_name,
+        fac.full_name AS validator_name,
+        frm.remarks AS validation_remarks,
+        frm.created_at AS validation_date
+    FROM fingerprint_tests ft
+    JOIN users u ON ft.student_id = u.id
+    LEFT JOIN faculty_remarks frm ON ft.id = frm.test_id
+    LEFT JOIN users fac ON frm.faculty_id = fac.id
+    WHERE 1=1
+";
 
-    if ($matches_surface && $matches_powder) {
-        $filtered_records[] = $rec;
+$params = [];
+
+if (!empty($search_student)) {
+    $query_str .= " AND u.full_name LIKE :student";
+    $params[':student'] = '%' . $search_student . '%';
+}
+
+if (!empty($filter_powder)) {
+    $query_str .= " AND ft.powder_type = :powder";
+    $params[':powder'] = $filter_powder;
+}
+
+if (!empty($filter_surface)) {
+    $query_str .= " AND ft.surface_type = :surface";
+    $params[':surface'] = $filter_surface;
+}
+
+if (!empty($filter_status)) {
+    $query_str .= " AND ft.status = :status";
+    $params[':status'] = $filter_status;
+}
+
+$query_str .= " ORDER BY ft.id DESC";
+
+$stmt = $pdo->prepare($query_str);
+$stmt->execute($params);
+$trial_records = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// View detail of a single record
+$view_record = null;
+if (isset($_GET['view'])) {
+    $v_id = intval($_GET['view']);
+    foreach ($trial_records as $rec) {
+        if ((int)$rec['id'] === $v_id) {
+            $view_record = $rec;
+            break;
+        }
     }
 }
 ?>
@@ -102,106 +83,46 @@ foreach ($records as $rec) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Records Management - Green Forensics</title>
+    <title>Trial Records Monitoring - Green Forensics</title>
     <!-- CSS Stylesheet -->
-    <link rel="stylesheet" href="../css/admin_style.css?v=1.5">
+    <link rel="stylesheet" href="../css/admin_style.css?v=1.6">
     <!-- Google Fonts Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        .badge-pending  { background:rgba(243,156,18,.15); color:#b7770d; border:1px solid rgba(243,156,18,.25); padding:3px 10px; border-radius:20px; font-size:.7rem; font-weight:700; }
+        .badge-approved { background:rgba(82,183,136,.15); color:#1e7e34; border:1px solid rgba(82,183,136,.25); padding:3px 10px; border-radius:20px; font-size:.7rem; font-weight:700; }
+        .badge-rejected { background:rgba(224,122,95,.15); color:var(--danger); border:1px solid rgba(224,122,95,.2); padding:3px 10px; border-radius:20px; font-size:.7rem; font-weight:700; }
+
+        /* Detail Modal */
+        .detail-overlay { display:none; position:fixed; inset:0; background:rgba(27, 67, 50, 0.45); backdrop-filter: blur(4px); z-index:9999; align-items:center; justify-content:center; }
+        .detail-overlay.open { display:flex; }
+        .detail-modal { background:#fff; border-radius:16px; max-width:600px; width:92%; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.2); border: 1px solid rgba(27,67,50,0.1); }
+        .detail-modal-header { padding:1.25rem 1.5rem; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; background:var(--dark-green); color:#fff; }
+        .detail-modal-header h3 { color:#fff; font-size:1.05rem; font-weight:700; margin:0; }
+        .detail-modal-body { padding:1.5rem; }
+        .detail-row { display:flex; gap:.5rem; margin-bottom:.75rem; font-size:.85rem; }
+        .detail-label { min-width:160px; font-weight:600; color:var(--dark-green); }
+        .detail-value { color:#5f5f5f; flex:1; }
+        .modal-close-btn { background:none; border:none; font-size:1.4rem; cursor:pointer; color:#fff; opacity:0.8; line-height:1; }
+        .modal-close-btn:hover { opacity:1; }
+        .section-divider { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#6B8F71; border-bottom:1px solid #D2E2D5; padding-bottom:.35rem; margin:1.25rem 0 .6rem; }
+        .section-divider:first-child { margin-top: 0; }
+        
+        .score-box { background: var(--cream); border-radius:8px; padding:10px 15px; margin-bottom:1rem; border:1px solid rgba(45,106,79,0.08); }
+        .score-title { font-size:0.75rem; font-weight:700; color:var(--medium-green); margin-bottom:6px; text-transform:uppercase; }
+        .score-values { display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; text-align:center; }
+        .score-val { font-size:1.15rem; font-weight:800; color:var(--dark-green); }
+        .score-lbl { font-size:0.65rem; color:var(--gray); font-weight:600; text-transform:uppercase; }
+
+        .warning-banner { background:rgba(244,162,97,0.12); color:#c87b1c; padding:10px 15px; border-radius:8px; border:1.5px solid rgba(244,162,97,0.2); font-size:0.8rem; font-weight:600; margin-bottom:1.25rem; display:flex; gap:8px; align-items:center; }
+    </style>
 </head>
 
 <body>
 
     <div class="admin-wrapper">
         <!-- SIDEBAR NAVIGATION -->
-        <aside class="admin-sidebar" id="sidebar">
-            <div class="sidebar-brand">
-                <div class="brand-text">
-                    <span>GREEN</span><span class="brand-accent">FORENSICS</span>
-                </div>
-            </div>
-
-            <div class="sidebar-user">
-                <div class="user-info">
-                    <div class="user-avatar">SA</div>
-                    <div class="user-details">
-                        <h4><?php echo htmlspecialchars($_SESSION["user_name"]); ?></h4>
-                        <span>Super Admin</span>
-                    </div>
-                </div>
-            </div>
-
-            <ul class="sidebar-menu">
-                <li class="menu-item">
-                    <a href="admin_dashboard.php" class="menu-link">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="3" width="7" height="9"></rect>
-                            <rect x="14" y="3" width="7" height="5"></rect>
-                            <rect x="14" y="12" width="7" height="9"></rect>
-                            <rect x="3" y="16" width="7" height="5"></rect>
-                        </svg>
-                        <span>Dashboard</span>
-                    </a>
-                </li>
-                <li class="menu-item">
-                    <a href="admin_users.php" class="menu-link">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                        </svg>
-                        <span>User Management</span>
-                    </a>
-                </li>
-                <li class="menu-item active">
-                    <a href="admin_records.php" class="menu-link">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="16" y1="13" x2="8" y2="13"></line>
-                            <line x1="16" y1="17" x2="8" y2="17"></line>
-                            <polyline points="10 9 9 9 8 9"></polyline>
-                        </svg>
-                        <span>Records</span>
-                    </a>
-                </li>
-                <li class="menu-item">
-                    <a href="admin_reports.php" class="menu-link">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
-                            <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
-                        </svg>
-                        <span>Reports</span>
-                    </a>
-                </li>
-                <li class="menu-item">
-                    <a href="admin_security.php" class="menu-link">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                        </svg>
-                        <span>Security / Backup</span>
-                    </a>
-                </li>
-            </ul>
-
-            <div class="sidebar-footer">
-                <a href="../logout.php" class="menu-link" style="color: #e07a5f;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                        <polyline points="16 17 21 12 16 7"></polyline>
-                        <line x1="21" y1="12" x2="9" y2="12"></line>
-                    </svg>
-                    <span>Logout</span>
-                </a>
-            </div>
-        </aside>
+        <?php include "sidebar.php"; ?>
 
         <!-- MAIN LAYOUT CONTENT -->
         <main class="admin-main">
@@ -217,20 +138,8 @@ foreach ($records as $rec) {
                         </svg>
                     </button>
                     <div class="header-title">
-                        <h2>Green Forensics Evaluating System</h2>
+                        <h2>Green Forensics — Super Administrator Dashboard</h2>
                     </div>
-                </div>
-
-                <div class="header-right">
-                    <a href="../logout.php" class="header-logout">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-                            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                            <polyline points="16 17 21 12 16 7"></polyline>
-                            <line x1="21" y1="12" x2="9" y2="12"></line>
-                        </svg>
-                        <span>Sign Out</span>
-                    </a>
                 </div>
             </header>
 
@@ -238,9 +147,8 @@ foreach ($records as $rec) {
             <div class="admin-content">
                 <div class="page-header-wrap">
                     <div class="page-title">
-                        <h1>Forensic Trial Records</h1>
-                        <p>Detailed evaluation database of latent fingerprint powder clarity, accuracy scores, and image
-                            metadata.</p>
+                        <h1>Trial Records Monitoring</h1>
+                        <p>Detailed evaluation database of latent fingerprint powder clarity, accuracy scores, and validation histories.</p>
                     </div>
                 </div>
 
@@ -248,18 +156,37 @@ foreach ($records as $rec) {
                 <div class="dashboard-card" style="margin-bottom: 1.5rem; padding: 1.25rem;">
                     <form method="GET" action="admin_records.php" class="search-filter-bar">
                         <div class="bar-left">
-                            <input type="text" name="surface" class="form-control-inline"
-                                placeholder="Filter by Surface (e.g. Glass)"
-                                value="<?php echo htmlspecialchars($search_surface); ?>" style="min-width: 250px;">
+                            <input type="text" name="student" class="form-control-inline"
+                                placeholder="Filter by Student Name..."
+                                value="<?php echo htmlspecialchars($search_student); ?>" style="min-width: 200px;">
+                            
                             <select name="powder" class="form-control-inline">
                                 <option value="">All Powder Types</option>
-                                <option value="Eggshell Powder" <?php echo $filter_powder === 'Eggshell Powder' ? 'selected' : ''; ?>>Eggshell Powder</option>
-                                <option value="Commercial Carbon" <?php echo $filter_powder === 'Commercial Carbon' ? 'selected' : ''; ?>>Commercial Carbon</option>
+                                <option value="eggshell" <?php echo $filter_powder === 'eggshell' ? 'selected' : ''; ?>>Eggshell Powder</option>
+                                <option value="commercial" <?php echo $filter_powder === 'commercial' ? 'selected' : ''; ?>>Commercial Carbon</option>
                             </select>
+
+                            <select name="surface" class="form-control-inline">
+                                <option value="">All Surface Types</option>
+                                <option value="glass" <?php echo $filter_surface === 'glass' ? 'selected' : ''; ?>>Glass</option>
+                                <option value="paper" <?php echo $filter_surface === 'paper' ? 'selected' : ''; ?>>Paper</option>
+                                <option value="wood" <?php echo $filter_surface === 'wood' ? 'selected' : ''; ?>>Wood</option>
+                                <option value="plastic" <?php echo $filter_surface === 'plastic' ? 'selected' : ''; ?>>Plastic</option>
+                                <option value="metal" <?php echo $filter_surface === 'metal' ? 'selected' : ''; ?>>Metal</option>
+                                <option value="ceramic" <?php echo $filter_surface === 'ceramic' ? 'selected' : ''; ?>>Ceramic</option>
+                                <option value="fabric" <?php echo $filter_surface === 'fabric' ? 'selected' : ''; ?>>Fabric</option>
+                            </select>
+
+                            <select name="status" class="form-control-inline">
+                                <option value="">All Statuses</option>
+                                <option value="pending" <?php echo $filter_status === 'pending' ? 'selected' : ''; ?>>Pending</option>
+                                <option value="approved" <?php echo $filter_status === 'approved' ? 'selected' : ''; ?>>Approved</option>
+                                <option value="rejected" <?php echo $filter_status === 'rejected' ? 'selected' : ''; ?>>Rejected</option>
+                            </select>
+
                             <button type="submit" class="btn btn-secondary">Filter Records</button>
-                            <?php if (!empty($search_surface) || !empty($filter_powder)): ?>
-                                <a href="admin_records.php" class="btn btn-secondary btn-sm" style="border: none;">Clear
-                                    Filters</a>
+                            <?php if (!empty($search_student) || !empty($filter_powder) || !empty($filter_surface) || !empty($filter_status)): ?>
+                                <a href="admin_records.php" class="btn btn-secondary btn-sm" style="border: none;">Clear Filters</a>
                             <?php endif; ?>
                         </div>
                     </form>
@@ -272,73 +199,85 @@ foreach ($records as $rec) {
                             <thead>
                                 <tr>
                                     <th>Trial ID</th>
-                                    <th>Fingerprint Image</th>
+                                    <th>Student Name</th>
+                                    <th>Powder Type</th>
                                     <th>Surface Type</th>
-                                    <th>Powder Used</th>
+                                    <th>Fingerprint Image</th>
                                     <th>Accuracy Score</th>
-                                    <th>Quality Rating</th>
-                                    <th>Date Evaluated</th>
+                                    <th>Status</th>
+                                    <th>Date Submitted</th>
+                                    <th>Faculty Validator</th>
                                     <th style="text-align: right;">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php if (count($filtered_records) > 0): ?>
-                                    <?php foreach ($filtered_records as $rec): ?>
+                                <?php if (count($trial_records) > 0): ?>
+                                    <?php foreach ($trial_records as $rec): ?>
                                         <tr>
                                             <td style="font-weight: 700; color: var(--gray);">#<?php echo $rec['id']; ?></td>
+                                            <td style="font-weight: 600; color: var(--dark-green);"><?php echo htmlspecialchars($rec['student_name']); ?></td>
+                                            <td>
+                                                <span style="color: <?php echo ($rec['powder_type'] === 'eggshell') ? 'var(--medium-green)' : 'var(--gray)'; ?>; font-weight: 600; text-transform: capitalize;">
+                                                    <?php echo $rec['powder_type']; ?>
+                                                </span>
+                                            </td>
+                                            <td style="text-transform: capitalize; font-weight: 500;"><?php echo htmlspecialchars($rec['surface_type']); ?></td>
                                             <td>
                                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                                    <!-- Mock Thumbnail Image Container -->
-                                                    <div
-                                                        style="width: 32px; height: 32px; border-radius: 4px; background: #e9ecef; border: 1px solid var(--light-gray); display: flex; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 700; color: var(--medium-green); overflow: hidden;">
-                                                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
-                                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                            stroke-linejoin="round">
-                                                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                                                        </svg>
+                                                    <div style="width: 32px; height: 32px; border-radius: 4px; background: #e9ecef; border: 1px solid var(--light-gray); display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                                                        <?php if (!empty($rec['fingerprint_image'])): ?>
+                                                            <img src="../uploads/<?php echo htmlspecialchars($rec['fingerprint_image']); ?>" style="width: 100%; height: 100%; object-fit: cover;" alt="Fingerprint">
+                                                        <?php else: ?>
+                                                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--medium-green);">
+                                                                <path d="M12 2a10 10 0 0 0-7.3 16.8"></path>
+                                                                <path d="M12 2a10 10 0 0 1 7.3 16.8"></path>
+                                                                <path d="M12 6a6 6 0 0 0-4.4 10.1"></path>
+                                                                <path d="M12 6a6 6 0 0 1 4.4 10.1"></path>
+                                                                <path d="M12 10a2 2 0 0 0-1.5 3.4"></path>
+                                                                <path d="M12 10a2 2 0 0 1 1.5 3.4"></path>
+                                                                <path d="M12 14v4"></path>
+                                                            </svg>
+                                                        <?php endif; ?>
                                                     </div>
-                                                    <span
-                                                        style="font-family: monospace; font-size: 0.75rem; color: var(--dark-green);"><?php echo $rec['image']; ?></span>
+                                                    <span style="font-family: monospace; font-size: 0.75rem; color: var(--gray);">
+                                                        <?php echo !empty($rec['fingerprint_image']) ? htmlspecialchars($rec['fingerprint_image']) : 'placeholder.jpg'; ?>
+                                                    </span>
                                                 </div>
-                                            </td>
-                                            <td style="font-weight: 600;"><?php echo htmlspecialchars($rec['surface']); ?></td>
-                                            <td>
-                                                <span
-                                                    style="color: <?php echo ($rec['powder'] === 'Eggshell Powder') ? 'var(--medium-green)' : 'var(--gray)'; ?>; font-weight: 600;">
-                                                    <?php echo $rec['powder']; ?>
-                                                </span>
                                             </td>
                                             <td>
                                                 <div style="display:flex; align-items:center; gap:0.5rem;">
-                                                    <div
-                                                        style="width: 50px; background-color: var(--light-gray); height: 6px; border-radius: 3px; overflow:hidden;">
-                                                        <div
-                                                            style="width: <?php echo $rec['accuracy']; ?>%; height: 100%; background-color: <?php echo ($rec['accuracy'] >= 90) ? 'var(--medium-green)' : (($rec['accuracy'] >= 80) ? 'var(--accent-green)' : 'var(--warning)'); ?>;">
-                                                        </div>
+                                                    <div style="width: 50px; background-color: var(--light-gray); height: 6px; border-radius: 3px; overflow:hidden;">
+                                                        <div style="width: <?php echo $rec['accuracy_score']; ?>%; height: 100%; background-color: <?php echo ($rec['accuracy_score'] >= 90) ? 'var(--medium-green)' : (($rec['accuracy_score'] >= 80) ? 'var(--accent-green)' : 'var(--warning)'); ?>;"></div>
                                                     </div>
-                                                    <span
-                                                        style="font-weight: 700; color: var(--dark-green);"><?php echo $rec['accuracy']; ?>%</span>
+                                                    <span style="font-weight: 700; color: var(--dark-green);"><?php echo number_format($rec['accuracy_score'], 1); ?>%</span>
                                                 </div>
                                             </td>
                                             <td>
-                                                <span
-                                                    class="badge badge-<?php echo ($rec['quality'] === 'Excellent' || $rec['quality'] === 'Very Good') ? 'success' : 'warning'; ?>">
-                                                    <?php echo $rec['quality']; ?>
+                                                <span class="badge-<?php echo $rec['status']; ?>">
+                                                    <?php echo ucfirst($rec['status']); ?>
                                                 </span>
                                             </td>
-                                            <td><?php echo date('M d, Y h:i A', strtotime($rec['date'])); ?></td>
+                                            <td><?php echo date('M d, Y h:i A', strtotime($rec['submitted_at'])); ?></td>
+                                            <td>
+                                                <span style="font-weight: 600; color: #5f5f5f;">
+                                                    <?php echo htmlspecialchars($rec['validator_name'] ?: '—'); ?>
+                                                </span>
+                                            </td>
                                             <td style="text-align: right;">
-                                                <button class="btn btn-secondary btn-sm"
-                                                    onclick="alert('Viewing original fingerprint record #<?php echo $rec['id']; ?>... [Awaiting Latent Image Viewer API]')">
+                                                <a href="admin_records.php?view=<?php echo $rec['id']; ?><?php 
+                                                    echo !empty($search_student) ? '&student='.urlencode($search_student) : '';
+                                                    echo !empty($filter_powder) ? '&powder='.urlencode($filter_powder) : '';
+                                                    echo !empty($filter_surface) ? '&surface='.urlencode($filter_surface) : '';
+                                                    echo !empty($filter_status) ? '&status='.urlencode($filter_status) : '';
+                                                ?>" class="btn btn-secondary btn-sm">
                                                     <span>View Details</span>
-                                                </button>
+                                                </a>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
                                 <?php else: ?>
                                     <tr>
-                                        <td colspan="8" style="text-align: center; color: var(--gray); padding: 2rem;">No
-                                            trial records match filter options.</td>
+                                        <td colspan="10" style="text-align: center; color: var(--gray); padding: 2rem;">No trial records match filter options.</td>
                                     </tr>
                                 <?php endif; ?>
                             </tbody>
@@ -348,6 +287,64 @@ foreach ($records as $rec) {
             </div>
         </main>
     </div>
+
+    <!-- VIEW RECORD MODAL -->
+    <?php if ($view_record): ?>
+    <div class="detail-overlay open" id="recordOverlay">
+        <div class="detail-modal">
+            <div class="detail-modal-header">
+                <h3>Trial Record Details: ID #<?php echo $view_record['id']; ?></h3>
+                <button class="modal-close-btn" onclick="document.getElementById('recordOverlay').classList.remove('open')">&times;</button>
+            </div>
+            <div class="detail-modal-body">
+                <div class="warning-banner">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <span>Read-Only Mode: Scientific accuracy scores and validation remarks are restricted to Faculty Researchers.</span>
+                </div>
+
+                <p class="section-divider">Forensic Submissions Details</p>
+                <div class="detail-row"><span class="detail-label">Student Submitter</span><span class="detail-value"><?php echo htmlspecialchars($view_record['student_name']); ?></span></div>
+                <div class="detail-row"><span class="detail-label">Powder Type Used</span><span class="detail-value" style="text-transform: capitalize; font-weight: 600;"><?php echo htmlspecialchars($view_record['powder_type']); ?></span></div>
+                <div class="detail-row"><span class="detail-label">Surface Material Type</span><span class="detail-value" style="text-transform: capitalize; font-weight: 600;"><?php echo htmlspecialchars($view_record['surface_type']); ?></span></div>
+                <div class="detail-row"><span class="detail-label">Notes from Submission</span><span class="detail-value"><?php echo nl2br(htmlspecialchars($view_record['notes'] ?: 'No notes provided.')); ?></span></div>
+                <div class="detail-row"><span class="detail-label">Date Submitted</span><span class="detail-value"><?php echo date('F d, Y g:i A', strtotime($view_record['submitted_at'])); ?></span></div>
+
+                <p class="section-divider">Biometric Clarity & Adhesion Scores</p>
+                <div class="score-box">
+                    <div class="score-title">Individual Forensic Performance Metrics</div>
+                    <div class="score-values">
+                        <div>
+                            <div class="score-val"><?php echo number_format($view_record['ridge_clarity_score'], 1); ?>%</div>
+                            <div class="score-lbl">Clarity</div>
+                        </div>
+                        <div>
+                            <div class="score-val"><?php echo number_format($view_record['visibility_score'], 1); ?>%</div>
+                            <div class="score-lbl">Visibility</div>
+                        </div>
+                        <div>
+                            <div class="score-val"><?php echo number_format($view_record['adhesion_score'], 1); ?>%</div>
+                            <div class="score-lbl">Adhesion</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="detail-row" style="background: var(--cream); padding: 8px 12px; border-radius: 6px; border-left: 4px solid var(--medium-green);">
+                    <span class="detail-label" style="font-weight: 700;">Composite Accuracy Score</span>
+                    <span class="detail-value" style="font-weight: 800; color: var(--dark-green); font-size:1.1rem;"><?php echo number_format($view_record['accuracy_score'], 1); ?>%</span>
+                </div>
+
+                <p class="section-divider">Validation Details</p>
+                <div class="detail-row"><span class="detail-label">Validation Status</span><span class="detail-value"><span class="badge-<?php echo $view_record['status']; ?>"><?php echo ucfirst($view_record['status']); ?></span></span></div>
+                <div class="detail-row"><span class="detail-label">Faculty Reviewer</span><span class="detail-value" style="font-weight: 600;"><?php echo htmlspecialchars($view_record['validator_name'] ?: 'Awaiting Review'); ?></span></div>
+                <div class="detail-row"><span class="detail-label">Review Date</span><span class="detail-value"><?php echo $view_record['validation_date'] ? date('F d, Y g:i A', strtotime($view_record['validation_date'])) : '—'; ?></span></div>
+                <div class="detail-row"><span class="detail-label">Remarks from Reviewer</span><span class="detail-value" style="font-style: italic;"><?php echo nl2br(htmlspecialchars($view_record['validation_remarks'] ?: 'No evaluation remarks submitted yet.')); ?></span></div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <!-- JS Toggles -->
     <script>
